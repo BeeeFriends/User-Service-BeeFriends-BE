@@ -11,7 +11,12 @@ import { UserModule } from './modules/user/user.module';
 class HealthController {
   @Get()
   check() {
-    return { status: 'ok' };
+    return {
+      status: 'ok',
+      service: 'user-service',
+      timestamp: new Date().toISOString(),
+      uptime: Math.floor(process.uptime()),
+    };
   }
 }
 
