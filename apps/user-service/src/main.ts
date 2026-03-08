@@ -23,7 +23,8 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, transform: true }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.enableCors();
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',') ?? ['*'];
+  app.enableCors({ origin: corsOrigins, credentials: true });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('BeeFriends - User Service')
