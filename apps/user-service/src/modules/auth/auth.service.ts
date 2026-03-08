@@ -58,11 +58,22 @@ export class AuthService {
   async firebaseAuth(dto: FirebaseAuthDto) {
     const decoded = await admin.auth().verifyIdToken(dto.idToken);
 
+    if (decoded.email) {
+      const existingByEmail = await this.prisma.msUser.findUnique({
+        where: { Email: decoded.email },
+      });
+      if (existingByEmail) {
+        const linked = await this.prisma.msUser.update({
+          where: { Email: decoded.email },
+          data: { FirebaseUID: decoded.uid, UpdatedAt: new Date() },
+        });
+        return this.issueToken(linked);
+      }
+    }
+
     const user = await this.prisma.msUser.upsert({
       where: { FirebaseUID: decoded.uid },
-      update: {
-        UpdatedAt: new Date(),
-      },
+      update: { UpdatedAt: new Date() },
       create: {
         Username: decoded.name ?? decoded.email?.split('@')[0] ?? 'user',
         Email: decoded.email ?? null,
