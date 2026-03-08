@@ -11,4 +11,4 @@ RUN npm run build
 
 EXPOSE 3001
 
-CMD ["node", "dist/apps/user-service/main"]
+CMD ["node", "dist/apps/user-service/apps/user-service/src/main"]
