@@ -1,14 +1,64 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model MsUser {
+  UserID       Int           @id @default(autoincrement())
+  Username     String        @db.VarChar(255)
+  Password     String?       @db.VarChar(255)
+  Email        String?       @unique @db.VarChar(255)
+  FirebaseUID  String?       @unique @db.VarChar(255)
+  ImageUrl     String        @default("") @db.VarChar(255)
+  Description  String        @default("") @db.VarChar(255)
+  CampusID     Int?
+  DepartmentID Int?
+  CodeYear     Int?
+  Avatar       String        @default("") @db.VarChar(255)
+  Stsrc        String        @default("A") @db.VarChar(1)
+  CreatedAt    DateTime?
+  CreatedBy    String?
+  UpdatedAt    DateTime?
+  UpdatedBy    String?
+  campus       MsCampus?     @relation(fields: [CampusID], references: [CampusID])
+  department   MsDepartment? @relation(fields: [DepartmentID], references: [DepartmentID])
+  hobbies      TrHobby[]
+}
+
+model MsCampus {
+  CampusID      Int       @id @default(autoincrement())
+  CampusName    String    @db.VarChar(255)
+  CampusAddress String    @db.VarChar(255)
+  Stsrc         String    @default("A") @db.VarChar(1)
+  CreatedAt     DateTime?
+  CreatedBy     String?
+  UpdatedAt     DateTime?
+  UpdatedBy     String?
+  users         MsUser[]
+}
+
+model MsDepartment {
+  DepartmentID   Int       @id @default(autoincrement())
+  DepartmentName String    @db.VarChar(255)
+  Stsrc          String    @default("A") @db.VarChar(1)
+  CreatedAt      DateTime?
+  CreatedBy      String?
+  UpdatedAt      DateTime?
+  UpdatedBy      String?
+  users          MsUser[]
+}
+
+model TrHobby {
+  HobbyID   Int       @id @default(autoincrement())
+  UserID    Int
+  RoleName  String    @db.VarChar(255)
+  Stsrc     String    @default("A") @db.VarChar(1)
+  CreatedAt DateTime?
+  CreatedBy String?
+  UpdatedAt DateTime?
+  UpdatedBy String?
+  user      MsUser    @relation(fields: [UserID], references: [UserID])
 }
