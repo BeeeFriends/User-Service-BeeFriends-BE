@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "user:prisma:generate": "prisma generate --config prisma.user.config.ts",
     "user:prisma:migrate": "prisma migrate dev --config prisma.user.config.ts",
-    "user:prisma:studio": "prisma studio --config prisma.user.config.ts"
+    "user:prisma:studio": "prisma studio --config prisma.user.config.ts",
+    "user:prisma:seed": "ts-node -r tsconfig-paths/register apps/user-service/prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
