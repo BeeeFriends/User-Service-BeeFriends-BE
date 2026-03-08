@@ -11,6 +11,9 @@ import { FirebaseAuthDto } from './dto/firebase-auth.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
+const defaultAvatar = (seed: string) =>
+  `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(seed)}`;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -30,6 +33,7 @@ export class AuthService {
         Username: dto.username,
         Password: hashedPassword,
         Email: dto.email,
+        ImageUrl: defaultAvatar(dto.username),
         CampusID: dto.campusId ?? null,
         DepartmentID: dto.departmentId ?? null,
         CodeYear: dto.codeYear ?? null,
@@ -78,8 +82,7 @@ export class AuthService {
         Username: decoded.name ?? decoded.email?.split('@')[0] ?? 'user',
         Email: decoded.email ?? null,
         FirebaseUID: decoded.uid,
-        ImageUrl: decoded.picture ?? '',
-        Avatar: decoded.picture ?? '',
+        ImageUrl: decoded.picture || defaultAvatar(decoded.name ?? decoded.uid),
         Stsrc: 'A',
         CreatedAt: new Date(),
         CreatedBy: decoded.email ?? decoded.uid,
