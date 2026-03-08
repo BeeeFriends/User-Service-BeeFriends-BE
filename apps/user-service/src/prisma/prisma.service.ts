@@ -3,6 +3,10 @@ import { PrismaClient } from '@prisma/user-client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    super({ datasources: { db: { url: process.env.USER_DATABASE_URL } } } as any);
+  }
+
   async onModuleInit() {
     await this.$connect();
   }
