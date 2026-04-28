@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/user-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model MsUser {
+  UserID          Int           @id @default(autoincrement())
+  Username        String        @db.VarChar(255)
+  Email           String        @unique @db.VarChar(255)
+  FirebaseUID     String        @unique @db.VarChar(255)
+  PhoneNumber     String        @db.VarChar(32)
+  ProfilePhotoUrl String        @db.VarChar(512)
+  Description     String        @default("") @db.VarChar(512)
+  CampusID        Int
+  DepartmentID    Int
+  CodeYear        Int
+  Stsrc           String        @default("A") @db.VarChar(1)
+  CreatedAt       DateTime?
+  CreatedBy       String?
+  UpdatedAt       DateTime?
+  UpdatedBy       String?
+  campus          MsCampus      @relation(fields: [CampusID], references: [CampusID])
+  department      MsDepartment  @relation(fields: [DepartmentID], references: [DepartmentID])
+  hobbies         TrUserHobby[]
+  photos          TrUserPhoto[]
+}
+
+model MsCampus {
+  CampusID      Int       @id @default(autoincrement())
+  CampusName    String    @db.VarChar(255)
+  CampusAddress String    @db.VarChar(255)
+  Stsrc         String    @default("A") @db.VarChar(1)
+  CreatedAt     DateTime?
+  CreatedBy     String?
+  UpdatedAt     DateTime?
+  UpdatedBy     String?
+  users         MsUser[]
+}
+
+model MsDepartment {
+  DepartmentID   Int       @id @default(autoincrement())
+  DepartmentName String    @db.VarChar(255)
+  Stsrc          String    @default("A") @db.VarChar(1)
+  CreatedAt      DateTime?
+  CreatedBy      String?
+  UpdatedAt      DateTime?
+  UpdatedBy      String?
+  users          MsUser[]
+}
+
+model MsHobby {
+  HobbyID   Int           @id @default(autoincrement())
+  HobbyName String        @unique @db.VarChar(100)
+  Stsrc     String        @default("A") @db.VarChar(1)
+  CreatedAt DateTime?
+  CreatedBy String?
+  UpdatedAt DateTime?
+  UpdatedBy String?
+  users     TrUserHobby[]
+}
+
+model TrUserHobby {
+  UserHobbyID Int       @id @default(autoincrement())
+  UserID      Int
+  HobbyID     Int
+  Stsrc       String    @default("A") @db.VarChar(1)
+  CreatedAt   DateTime?
+  CreatedBy   String?
+  UpdatedAt   DateTime?
+  UpdatedBy   String?
+  user        MsUser    @relation(fields: [UserID], references: [UserID], onDelete: Cascade)
+  hobby       MsHobby   @relation(fields: [HobbyID], references: [HobbyID])
+
+  @@unique([UserID, HobbyID])
+}
+
+model TrUserPhoto {
+  UserPhotoID Int       @id @default(autoincrement())
+  UserID      Int
+  PhotoUrl    String    @db.VarChar(512)
+  SortOrder   Int       @default(0)
+  IsProfile   Boolean   @default(false)
+  Stsrc       String    @default("A") @db.VarChar(1)
+  CreatedAt   DateTime?
+  CreatedBy   String?
+  UpdatedAt   DateTime?
+  UpdatedBy   String?
+  user        MsUser    @relation(fields: [UserID], references: [UserID], onDelete: Cascade)
+}
