@@ -6,9 +6,9 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run user:prisma:generate
+RUN npm run prisma:generate
 RUN npm run build
 
 EXPOSE 3001
 
-CMD ["node", "dist/apps/user-service/apps/user-service/src/main"]
+CMD ["node", "dist/main"]
