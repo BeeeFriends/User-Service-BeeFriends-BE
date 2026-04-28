@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '@common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  const apiPrefix = process.env.API_PREFIX ?? 'api/v1';
+  const docsPath = process.env.API_DOCS_PATH ?? 'api/docs';
+
   if (!admin.apps.length) {
     admin.initializeApp({
       credential: admin.credential.cert({
@@ -18,10 +21,12 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix(apiPrefix);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new HttpExceptionFilter());
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',') ?? ['*'];
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((origin) =>
+    origin.trim(),
+  ) ?? ['*'];
   app.enableCors({ origin: corsOrigins, credentials: true });
 
   const swaggerConfig = new DocumentBuilder()
@@ -32,13 +37,14 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup(docsPath, app, document);
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
 
   console.log(`User Service running on http://localhost:${port}`);
-  console.log(`Swagger docs   → http://localhost:${port}/api/docs`);
+  console.log(`API prefix     http://localhost:${port}/${apiPrefix}`);
+  console.log(`Swagger docs   http://localhost:${port}/${docsPath}`);
 }
 
 bootstrap();
