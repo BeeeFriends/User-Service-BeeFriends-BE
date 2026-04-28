@@ -1,29 +1,30 @@
 {
-  "name": "BE-BeeFriends",
+  "name": "beefriends-user-service",
   "version": "0.0.1",
-  "description": "",
+  "description": "BeeFriends User Service",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build user-service",
-    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
-    "start": "nest start user-service",
-    "start:dev": "nest start user-service --watch",
-    "start:debug": "nest start user-service --debug --watch",
-    "start:prod": "node dist/apps/user-service/apps/user-service/src/main",
-    "lint": "eslint \"{apps,libs}/**/*.ts\" --fix",
+    "build": "nest build",
+    "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.ts\"",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main",
+    "lint": "eslint \"{src,prisma}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "user:prisma:generate": "prisma generate --config prisma.user.config.ts",
-    "user:prisma:migrate": "prisma migrate dev --config prisma.user.config.ts",
-    "user:prisma:studio": "prisma studio --config prisma.user.config.ts",
-    "user:prisma:seed": "ts-node -r tsconfig-paths/register apps/user-service/prisma/seed.ts"
+    "prisma:generate": "prisma generate --config prisma.user.config.ts",
+    "prisma:migrate": "prisma migrate dev --config prisma.user.config.ts",
+    "prisma:studio": "prisma studio --config prisma.user.config.ts",
+    "prisma:seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
   },
   "dependencies": {
+    "@beefriends/shared-kernel": "^2.0.3",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.1",
@@ -80,16 +81,15 @@
       "ts"
     ],
     "roots": [
-      "<rootDir>/apps/",
-      "<rootDir>/libs/"
+      "<rootDir>/src/"
     ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "moduleNameMapper": {
-      "@lib/common/(.*)": "<rootDir>/libs/common/src/$1",
-      "@lib/common": "<rootDir>/libs/common/src"
+      "@common/(.*)": "<rootDir>/src/common/$1",
+      "@common": "<rootDir>/src/common"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
