@@ -20,8 +20,8 @@
     "noFallthroughCasesInSwitch": false,
     "esModuleInterop": true,
     "paths": {
-      "@lib/common": ["libs/common/src"],
-      "@lib/common/*": ["libs/common/src/*"]
+      "@common": ["src/common"],
+      "@common/*": ["src/common/*"]
     }
   }
 }
