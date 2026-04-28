@@ -1,13 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { CreateCampusDto } from '@beefriends/shared-kernel/dto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateCampusDto } from './dto/create-campus.dto';
 
 @Injectable()
 export class CampusService {
   constructor(private readonly prisma: PrismaService) {}
 
   findAll() {
-    return this.prisma.msCampus.findMany({ where: { Stsrc: 'A' } });
+    return this.prisma.msCampus.findMany({
+      where: { Stsrc: 'A' },
+      orderBy: { CampusName: 'asc' },
+    });
   }
 
   async findOne(id: number) {

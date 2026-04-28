@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as admin from 'firebase-admin';
-import { HttpExceptionFilter } from '@lib/common';
+import { HttpExceptionFilter } from '@common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -19,9 +19,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('api/v1');
-  app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true }),
-  );
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new HttpExceptionFilter());
   const corsOrigins = process.env.CORS_ORIGINS?.split(',') ?? ['*'];
   app.enableCors({ origin: corsOrigins, credentials: true });

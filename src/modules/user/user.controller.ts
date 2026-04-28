@@ -7,13 +7,9 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
-import { CurrentUser, JwtAuthGuard } from '@lib/common';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
+import { CurrentUser, JwtAuthGuard } from '@common';
 import { UserService } from './user.service';
 
 @ApiTags('Users')
