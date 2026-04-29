@@ -6,7 +6,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { LoginDto, RegisterDto } from '@beefriends/shared-kernel/dto';
+import {
+  FirebaseRegisterDto,
+  FirebaseTokenLoginDto,
+  LoginDto,
+  RegisterDto,
+} from '@beefriends/shared-kernel/dto';
 import * as admin from 'firebase-admin';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService, UploadedBlob } from '../storage/storage.service';
@@ -33,7 +38,7 @@ export class AuthService {
     private readonly storageService: StorageService,
   ) {}
 
-  async register(dto: RegisterDto, files: RegisterUploadFiles = {}) {
+  async register(dto: FirebaseRegisterDto, files: RegisterUploadFiles = {}) {
     const existing = await this.prisma.msUser.findUnique({
       where: { Email: dto.binusianEmail },
     });
@@ -72,7 +77,7 @@ export class AuthService {
       );
       uploadedBlobs.push(...galleryPhotos);
 
-      firebaseAccount = await this.createFirebaseUser(dto, profilePhoto.url);
+      firebaseAccount = await this.resolveFirebaseUser(dto, profilePhoto.url);
 
       const user = await this.prisma.msUser.create({
         data: {
@@ -126,6 +131,17 @@ export class AuthService {
     return this.issueToken(user);
   }
 
+  async loginWithFirebase(dto: FirebaseTokenLoginDto) {
+    const firebaseUser = await this.verifyFirebaseIdToken(dto.idToken);
+    const user = await this.findRegisteredFirebaseUser(
+      firebaseUser.uid,
+      firebaseUser.email,
+    );
+    if (!user) throw new UnauthorizedException('User is not registered yet');
+
+    return this.issueToken(user);
+  }
+
   private readonly userInclude = {
     campus: true,
     department: true,
@@ -139,6 +155,56 @@ export class AuthService {
       orderBy: { SortOrder: 'asc' as const },
     },
   };
+
+  private async resolveFirebaseUser(
+    dto: FirebaseRegisterDto,
+    profilePhotoUrl: string,
+  ) {
+    if (dto.firebaseIdToken) {
+      return this.useVerifiedFirebaseUser(dto, profilePhotoUrl);
+    }
+
+    if (!dto.password) {
+      throw new BadRequestException(
+        'Password or Firebase ID token is required',
+      );
+    }
+
+    return this.createFirebaseUser(dto, profilePhotoUrl);
+  }
+
+  private async useVerifiedFirebaseUser(
+    dto: FirebaseRegisterDto,
+    profilePhotoUrl: string,
+  ) {
+    const decoded = await this.verifyFirebaseIdToken(dto.firebaseIdToken!);
+    const tokenEmail = decoded.email?.toLowerCase();
+    const requestedEmail = dto.binusianEmail.toLowerCase();
+
+    if (!decoded.uid || !tokenEmail) {
+      throw new BadRequestException('Firebase token must include email');
+    }
+
+    if (tokenEmail !== requestedEmail) {
+      throw new BadRequestException(
+        'Firebase token email must match binusianEmail',
+      );
+    }
+
+    const linkedUser = await this.prisma.msUser.findUnique({
+      where: { FirebaseUID: decoded.uid },
+    });
+    if (linkedUser) {
+      throw new ConflictException('Firebase account already registered');
+    }
+
+    const user = await admin.auth().updateUser(decoded.uid, {
+      displayName: dto.displayName,
+      photoURL: profilePhotoUrl,
+    });
+
+    return { user, created: false };
+  }
 
   private async createFirebaseUser(dto: RegisterDto, profilePhotoUrl: string) {
     try {
@@ -211,6 +277,14 @@ export class AuthService {
     };
   }
 
+  private async verifyFirebaseIdToken(idToken: string) {
+    try {
+      return await admin.auth().verifyIdToken(idToken);
+    } catch {
+      throw new UnauthorizedException('Firebase token is invalid or expired');
+    }
+  }
+
   private getFirebaseLoginErrorMessage(message?: string) {
     if (
       message === 'EMAIL_NOT_FOUND' ||
@@ -227,7 +301,10 @@ export class AuthService {
     return 'Could not log in';
   }
 
-  private async findRegisteredFirebaseUser(firebaseUid?: string, email?: string) {
+  private async findRegisteredFirebaseUser(
+    firebaseUid?: string,
+    email?: string,
+  ) {
     if (!firebaseUid) return null;
 
     const byFirebaseUid = await this.prisma.msUser.findUnique({

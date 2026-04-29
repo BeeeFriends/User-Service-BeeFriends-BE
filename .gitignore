@@ -5,6 +5,7 @@ dist
 # Environment
 .env
 .env.local
+firebase-service-account.json
 
 # Prisma generated
 /generated

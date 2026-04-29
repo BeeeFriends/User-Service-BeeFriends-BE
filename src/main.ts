@@ -4,19 +4,32 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as admin from 'firebase-admin';
 import { HttpExceptionFilter } from '@common';
 import { AppModule } from './app.module';
+import { readFirebaseServiceAccount } from './config/firebase-admin';
 
 async function bootstrap() {
   const apiPrefix = process.env.API_PREFIX ?? 'api/v1';
   const docsPath = process.env.API_DOCS_PATH ?? 'api/docs';
 
   if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
+    const firebaseCredential = readFirebaseServiceAccount();
+
+    admin.initializeApp(
+      firebaseCredential
+        ? {
+            credential: admin.credential.cert({
+              projectId: firebaseCredential.serviceAccount.project_id,
+              clientEmail: firebaseCredential.serviceAccount.client_email,
+              privateKey: firebaseCredential.serviceAccount.private_key,
+            }),
+          }
+        : undefined,
+    );
+
+    console.log(
+      firebaseCredential
+        ? `Firebase Admin SDK initialized from ${firebaseCredential.source}`
+        : 'Firebase Admin SDK initialized with application default credentials',
+    );
   }
 
   const app = await NestFactory.create(AppModule);

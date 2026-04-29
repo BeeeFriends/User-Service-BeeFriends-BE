@@ -8,6 +8,7 @@ import {
 import { Storage } from '@google-cloud/storage';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
+import { readFirebaseServiceAccount } from '../../config/firebase-admin';
 
 export type UploadedBlob = {
   objectName: string;
@@ -73,16 +74,20 @@ export class StorageService {
       this.publicBaseUrl ??
       this.configService.get<string>('GOOGLE_CLOUD_STORAGE_PUBLIC_URL');
 
+    const firebaseCredential = readFirebaseServiceAccount()?.serviceAccount;
     const projectId =
       this.configService.get<string>('GOOGLE_CLOUD_PROJECT_ID') ??
+      firebaseCredential?.project_id ??
       this.configService.get<string>('FIREBASE_PROJECT_ID');
     const clientEmail =
       this.configService.get<string>('GOOGLE_CLOUD_CLIENT_EMAIL') ??
+      firebaseCredential?.client_email ??
       this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
     const privateKey =
       this.configService
         .get<string>('GOOGLE_CLOUD_PRIVATE_KEY')
         ?.replace(/\\n/g, '\n') ??
+      firebaseCredential?.private_key ??
       this.configService
         .get<string>('FIREBASE_PRIVATE_KEY')
         ?.replace(/\\n/g, '\n');

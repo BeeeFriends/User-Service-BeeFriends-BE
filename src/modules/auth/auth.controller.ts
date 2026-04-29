@@ -8,7 +8,11 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { LoginDto, RegisterDto } from '@beefriends/shared-kernel/dto';
+import {
+  FirebaseRegisterDto,
+  FirebaseTokenLoginDto,
+  LoginDto,
+} from '@beefriends/shared-kernel/dto';
 import { memoryStorage } from 'multer';
 import { AuthService } from './auth.service';
 
@@ -59,7 +63,6 @@ export class AuthController {
       required: [
         'displayName',
         'binusianEmail',
-        'password',
         'phoneNumber',
         'binusianYear',
         'campusId',
@@ -74,6 +77,12 @@ export class AuthController {
           example: 'adrian001@binus.ac.id',
         },
         password: { type: 'string', example: 'password123' },
+        firebaseIdToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6Ij...',
+          description:
+            'Firebase ID token from frontend Firebase SDK. Use this instead of password for the Eldora-style flow.',
+        },
         phoneNumber: { type: 'string', example: '+6281234567890' },
         binusianYear: { type: 'integer', example: 2024 },
         campusId: { type: 'integer', example: 1 },
@@ -96,9 +105,11 @@ export class AuthController {
       },
     },
   })
-  @ApiOperation({ summary: 'Register Binusian profile and Firebase account' })
+  @ApiOperation({
+    summary: 'Register Binusian profile and link/create Firebase account',
+  })
   register(
-    @Body() dto: RegisterDto,
+    @Body() dto: FirebaseRegisterDto,
     @UploadedFiles() files: RegisterUploadFiles,
   ) {
     return this.authService.register(dto, files);
@@ -121,5 +132,23 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with Binusian email and password' })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Post('firebase-login')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['idToken'],
+      properties: {
+        idToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6Ij...',
+        },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Login with Firebase ID token from frontend' })
+  firebaseLogin(@Body() dto: FirebaseTokenLoginDto) {
+    return this.authService.loginWithFirebase(dto);
   }
 }
