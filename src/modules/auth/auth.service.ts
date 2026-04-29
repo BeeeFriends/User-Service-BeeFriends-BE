@@ -4,6 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto, RegisterDto } from '@beefriends/shared-kernel/dto';
 import * as admin from 'firebase-admin';
@@ -15,11 +16,20 @@ type RegisterUploadFiles = {
   photos?: Express.Multer.File[];
 };
 
+type FirebasePasswordLoginResponse = {
+  localId?: string;
+  email?: string;
+  error?: {
+    message?: string;
+  };
+};
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
     private readonly storageService: StorageService,
   ) {}
 
@@ -106,8 +116,11 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const decoded = await admin.auth().verifyIdToken(dto.idToken);
-    const user = await this.findRegisteredFirebaseUser(decoded);
+    const firebaseUser = await this.signInFirebaseUser(dto);
+    const user = await this.findRegisteredFirebaseUser(
+      firebaseUser.localId,
+      firebaseUser.email ?? dto.binusianEmail,
+    );
     if (!user) throw new UnauthorizedException('User is not registered yet');
 
     return this.issueToken(user);
@@ -160,17 +173,73 @@ export class AuthService {
     }
   }
 
-  private async findRegisteredFirebaseUser(decoded: admin.auth.DecodedIdToken) {
+  private async signInFirebaseUser(dto: LoginDto) {
+    const apiKey =
+      this.configService.get<string>('FIREBASE_WEB_API_KEY') ??
+      this.configService.get<string>('FIREBASE_API_KEY');
+
+    if (!apiKey) {
+      throw new Error('Firebase web API key is required for password login');
+    }
+
+    const response = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: dto.binusianEmail,
+          password: dto.password,
+          returnSecureToken: true,
+        }),
+      },
+    );
+
+    const body = (await response.json()) as FirebasePasswordLoginResponse;
+
+    if (!response.ok || !body.localId) {
+      throw new UnauthorizedException(
+        this.getFirebaseLoginErrorMessage(body.error?.message),
+      );
+    }
+
+    return {
+      localId: body.localId,
+      email: body.email,
+    };
+  }
+
+  private getFirebaseLoginErrorMessage(message?: string) {
+    if (
+      message === 'EMAIL_NOT_FOUND' ||
+      message === 'INVALID_PASSWORD' ||
+      message === 'INVALID_LOGIN_CREDENTIALS'
+    ) {
+      return 'Email or password is incorrect';
+    }
+
+    if (message === 'USER_DISABLED') {
+      return 'This account is disabled';
+    }
+
+    return 'Could not log in';
+  }
+
+  private async findRegisteredFirebaseUser(firebaseUid?: string, email?: string) {
+    if (!firebaseUid) return null;
+
     const byFirebaseUid = await this.prisma.msUser.findUnique({
-      where: { FirebaseUID: decoded.uid },
+      where: { FirebaseUID: firebaseUid },
       include: this.userInclude,
     });
     if (byFirebaseUid) return byFirebaseUid;
 
-    if (!decoded.email) return null;
+    if (!email) return null;
 
     const byEmail = await this.prisma.msUser.findUnique({
-      where: { Email: decoded.email },
+      where: { Email: email },
       include: this.userInclude,
     });
     if (!byEmail) return null;
@@ -178,9 +247,9 @@ export class AuthService {
     return this.prisma.msUser.update({
       where: { UserID: byEmail.UserID },
       data: {
-        FirebaseUID: decoded.uid,
+        FirebaseUID: firebaseUid,
         UpdatedAt: new Date(),
-        UpdatedBy: decoded.email,
+        UpdatedBy: email,
       },
       include: this.userInclude,
     });

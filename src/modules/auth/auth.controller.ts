@@ -105,7 +105,20 @@ export class AuthController {
   }
 
   @Post('login')
-  @ApiOperation({ summary: 'Login with Firebase ID token' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['binusianEmail', 'password'],
+      properties: {
+        binusianEmail: {
+          type: 'string',
+          example: 'adrian001@binus.ac.id',
+        },
+        password: { type: 'string', example: 'password123' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Login with Binusian email and password' })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
