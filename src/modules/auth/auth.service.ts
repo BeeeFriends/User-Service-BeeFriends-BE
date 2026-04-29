@@ -8,15 +8,22 @@ import { JwtService } from '@nestjs/jwt';
 import { LoginDto, RegisterDto } from '@beefriends/shared-kernel/dto';
 import * as admin from 'firebase-admin';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService, UploadedBlob } from '../storage/storage.service';
+
+type RegisterUploadFiles = {
+  profilePhoto?: Express.Multer.File[];
+  photos?: Express.Multer.File[];
+};
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly storageService: StorageService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, files: RegisterUploadFiles = {}) {
     const existing = await this.prisma.msUser.findUnique({
       where: { Email: dto.binusianEmail },
     });
@@ -26,16 +33,44 @@ export class AuthService {
     await this.ensureMajorExists(dto.majorId);
     await this.ensureHobbiesExist(dto.hobbyIds);
 
-    const firebaseAccount = await this.createFirebaseUser(dto);
+    const profilePhotoFile = files.profilePhoto?.[0];
+    if (!profilePhotoFile) {
+      throw new BadRequestException('Profile photo is required');
+    }
+
+    const uploadedBlobs: UploadedBlob[] = [];
+    let firebaseAccount:
+      | Awaited<ReturnType<typeof this.createFirebaseUser>>
+      | undefined;
 
     try {
+      const profilePhoto = await this.storageService.uploadUserPhoto(
+        dto.binusianEmail,
+        profilePhotoFile,
+        'profile',
+      );
+      uploadedBlobs.push(profilePhoto);
+
+      const galleryPhotos = await Promise.all(
+        (files.photos ?? []).map((photo) =>
+          this.storageService.uploadUserPhoto(
+            dto.binusianEmail,
+            photo,
+            'gallery',
+          ),
+        ),
+      );
+      uploadedBlobs.push(...galleryPhotos);
+
+      firebaseAccount = await this.createFirebaseUser(dto, profilePhoto.url);
+
       const user = await this.prisma.msUser.create({
         data: {
           Username: dto.displayName,
           Email: dto.binusianEmail,
           FirebaseUID: firebaseAccount.user.uid,
           PhoneNumber: dto.phoneNumber,
-          ProfilePhotoUrl: dto.profilePhotoUrl,
+          ProfilePhotoUrl: profilePhoto.url,
           Description: dto.description ?? '',
           CampusID: dto.campusId,
           DepartmentID: dto.majorId,
@@ -45,8 +80,8 @@ export class AuthService {
           CreatedBy: dto.binusianEmail,
           photos: {
             create: this.buildPhotoRows(
-              dto.profilePhotoUrl,
-              dto.photoUrls,
+              profilePhoto.url,
+              galleryPhotos.map((photo) => photo.url),
               dto.binusianEmail,
             ),
           },
@@ -59,12 +94,13 @@ export class AuthService {
 
       return this.issueToken(user);
     } catch (error) {
-      if (firebaseAccount.created) {
+      if (firebaseAccount?.created) {
         await admin
           .auth()
           .deleteUser(firebaseAccount.user.uid)
           .catch(() => undefined);
       }
+      await this.storageService.deleteUploadedBlobs(uploadedBlobs);
       throw error;
     }
   }
@@ -91,13 +127,13 @@ export class AuthService {
     },
   };
 
-  private async createFirebaseUser(dto: RegisterDto) {
+  private async createFirebaseUser(dto: RegisterDto, profilePhotoUrl: string) {
     try {
       const user = await admin.auth().createUser({
         email: dto.binusianEmail,
         password: dto.password,
         displayName: dto.displayName,
-        photoURL: dto.profilePhotoUrl,
+        photoURL: profilePhotoUrl,
       });
       return { user, created: true };
     } catch (error: any) {
@@ -118,7 +154,7 @@ export class AuthService {
       const user = await admin.auth().updateUser(firebaseUser.uid, {
         password: dto.password,
         displayName: dto.displayName,
-        photoURL: dto.profilePhotoUrl,
+        photoURL: profilePhotoUrl,
       });
       return { user, created: false };
     }

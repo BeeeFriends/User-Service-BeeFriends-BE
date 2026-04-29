@@ -1,7 +1,34 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Post,
+  UploadedFiles,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { LoginDto, RegisterDto } from '@beefriends/shared-kernel/dto';
+import { memoryStorage } from 'multer';
 import { AuthService } from './auth.service';
+
+type RegisterUploadFiles = {
+  profilePhoto?: Express.Multer.File[];
+  photos?: Express.Multer.File[];
+};
+
+const imageFileFilter = (
+  _request: unknown,
+  file: Express.Multer.File,
+  callback: (error: Error | null, acceptFile: boolean) => void,
+) => {
+  if (!file.mimetype?.startsWith('image/')) {
+    callback(new BadRequestException('Only image files are allowed'), false);
+    return;
+  }
+
+  callback(null, true);
+};
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -9,9 +36,72 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'profilePhoto', maxCount: 1 },
+        { name: 'photos', maxCount: 9 },
+      ],
+      {
+        storage: memoryStorage(),
+        fileFilter: imageFileFilter,
+        limits: {
+          fileSize: 5 * 1024 * 1024,
+          files: 10,
+        },
+      },
+    ),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: [
+        'displayName',
+        'binusianEmail',
+        'password',
+        'phoneNumber',
+        'binusianYear',
+        'campusId',
+        'majorId',
+        'hobbyIds',
+        'profilePhoto',
+      ],
+      properties: {
+        displayName: { type: 'string', example: 'Adrian' },
+        binusianEmail: {
+          type: 'string',
+          example: 'adrian001@binus.ac.id',
+        },
+        password: { type: 'string', example: 'password123' },
+        phoneNumber: { type: 'string', example: '+6281234567890' },
+        binusianYear: { type: 'integer', example: 2024 },
+        campusId: { type: 'integer', example: 1 },
+        majorId: { type: 'integer', example: 1 },
+        hobbyIds: {
+          oneOf: [
+            { type: 'array', items: { type: 'integer' } },
+            { type: 'string', example: '[1,2,3]' },
+          ],
+        },
+        description: {
+          type: 'string',
+          example: 'Computer Science student who loves coffee.',
+        },
+        profilePhoto: { type: 'string', format: 'binary' },
+        photos: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
+      },
+    },
+  })
   @ApiOperation({ summary: 'Register Binusian profile and Firebase account' })
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  register(
+    @Body() dto: RegisterDto,
+    @UploadedFiles() files: RegisterUploadFiles,
+  ) {
+    return this.authService.register(dto, files);
   }
 
   @Post('login')
