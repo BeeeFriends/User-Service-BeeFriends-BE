@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { Storage } from '@google-cloud/storage';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
@@ -11,24 +16,62 @@ export type UploadedBlob = {
 
 @Injectable()
 export class StorageService {
-  private readonly storage: Storage;
+  private readonly gcsStorage?: Storage;
+  private readonly s3Client?: S3Client;
+  private readonly s3Endpoint?: string;
   private readonly bucketName: string;
   private readonly publicBaseUrl?: string;
 
   constructor(private readonly configService: ConfigService) {
     this.bucketName =
+      this.configService.get<string>('RAILWAY_STORAGE_BUCKET') ??
+      this.configService.get<string>('S3_BUCKET') ??
+      this.configService.get<string>('AWS_S3_BUCKET') ??
+      this.configService.get<string>('FIREBASE_STORAGE_BUCKET') ??
       this.configService.get<string>('GOOGLE_CLOUD_STORAGE_BUCKET') ??
       this.configService.get<string>('GCS_BUCKET_NAME') ??
       this.configService.get<string>('STORAGE_BUCKET') ??
       '';
 
     if (!this.bucketName) {
-      throw new Error('GOOGLE_CLOUD_STORAGE_BUCKET is required');
+      throw new Error('Storage bucket is required');
     }
 
-    this.publicBaseUrl = this.configService.get<string>(
-      'GOOGLE_CLOUD_STORAGE_PUBLIC_URL',
-    );
+    this.publicBaseUrl = this.configService.get<string>('STORAGE_PUBLIC_URL');
+
+    this.s3Endpoint =
+      this.configService.get<string>('RAILWAY_STORAGE_ENDPOINT') ??
+      this.configService.get<string>('S3_ENDPOINT') ??
+      this.configService.get<string>('AWS_S3_ENDPOINT');
+    const s3AccessKeyId =
+      this.configService.get<string>('RAILWAY_STORAGE_ACCESS_KEY_ID') ??
+      this.configService.get<string>('S3_ACCESS_KEY_ID') ??
+      this.configService.get<string>('AWS_ACCESS_KEY_ID');
+    const s3SecretAccessKey =
+      this.configService.get<string>('RAILWAY_STORAGE_SECRET_ACCESS_KEY') ??
+      this.configService.get<string>('S3_SECRET_ACCESS_KEY') ??
+      this.configService.get<string>('AWS_SECRET_ACCESS_KEY');
+
+    if (this.s3Endpoint && s3AccessKeyId && s3SecretAccessKey) {
+      this.s3Client = new S3Client({
+        endpoint: this.s3Endpoint,
+        forcePathStyle: true,
+        region:
+          this.configService.get<string>('RAILWAY_STORAGE_REGION') ??
+          this.configService.get<string>('S3_REGION') ??
+          this.configService.get<string>('AWS_REGION') ??
+          'auto',
+        credentials: {
+          accessKeyId: s3AccessKeyId,
+          secretAccessKey: s3SecretAccessKey,
+        },
+      });
+      return;
+    }
+
+    this.publicBaseUrl =
+      this.publicBaseUrl ??
+      this.configService.get<string>('GOOGLE_CLOUD_STORAGE_PUBLIC_URL');
 
     const projectId =
       this.configService.get<string>('GOOGLE_CLOUD_PROJECT_ID') ??
@@ -44,7 +87,7 @@ export class StorageService {
         .get<string>('FIREBASE_PRIVATE_KEY')
         ?.replace(/\\n/g, '\n');
 
-    this.storage =
+    this.gcsStorage =
       projectId && clientEmail && privateKey
         ? new Storage({
             projectId,
@@ -70,15 +113,30 @@ export class StorageService {
     }
 
     const objectName = this.buildObjectName(userEmail, file, folder);
-    const bucketFile = this.storage.bucket(this.bucketName).file(objectName);
 
-    await bucketFile.save(file.buffer, {
-      contentType: file.mimetype,
-      resumable: false,
-      metadata: {
-        cacheControl: 'public, max-age=31536000, immutable',
-      },
-    });
+    if (this.s3Client) {
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.bucketName,
+          Key: objectName,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+          CacheControl: 'public, max-age=31536000, immutable',
+        }),
+      );
+    } else if (this.gcsStorage) {
+      const bucketFile = this.gcsStorage
+        .bucket(this.bucketName)
+        .file(objectName);
+
+      await bucketFile.save(file.buffer, {
+        contentType: file.mimetype,
+        resumable: false,
+        metadata: {
+          cacheControl: 'public, max-age=31536000, immutable',
+        },
+      });
+    }
 
     return {
       objectName,
@@ -88,13 +146,7 @@ export class StorageService {
 
   async deleteUploadedBlobs(blobs: UploadedBlob[]) {
     await Promise.all(
-      blobs.map((blob) =>
-        this.storage
-          .bucket(this.bucketName)
-          .file(blob.objectName)
-          .delete({ ignoreNotFound: true })
-          .catch(() => undefined),
-      ),
+      blobs.map((blob) => this.deleteUploadedBlob(blob).catch(() => undefined)),
     );
   }
 
@@ -120,6 +172,27 @@ export class StorageService {
       return `${this.publicBaseUrl.replace(/\/$/, '')}/${objectName}`;
     }
 
+    if (this.s3Endpoint) {
+      return `${this.s3Endpoint.replace(/\/$/, '')}/${this.bucketName}/${objectName}`;
+    }
+
     return `https://storage.googleapis.com/${this.bucketName}/${objectName}`;
+  }
+
+  private async deleteUploadedBlob(blob: UploadedBlob) {
+    if (this.s3Client) {
+      await this.s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: this.bucketName,
+          Key: blob.objectName,
+        }),
+      );
+      return;
+    }
+
+    await this.gcsStorage
+      ?.bucket(this.bucketName)
+      .file(blob.objectName)
+      .delete({ ignoreNotFound: true });
   }
 }
