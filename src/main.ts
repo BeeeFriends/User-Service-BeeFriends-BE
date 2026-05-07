@@ -1,14 +1,14 @@
-import { ValidationPipe } from '@nestjs/common';
+import { HttpStatus, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as admin from 'firebase-admin';
-import { HttpExceptionFilter } from '@common';
+import { HttpExceptionFilter, ResponseInterceptor } from '@common';
 import { AppModule } from './app.module';
 import { readFirebaseServiceAccount } from './config/firebase-admin';
 
 async function bootstrap() {
-  const apiPrefix = process.env.API_PREFIX ?? 'api/v1';
-  const docsPath = process.env.API_DOCS_PATH ?? 'api/docs';
+  const apiPrefix = process.env.API_PREFIX ?? 'v1/user';
+  const docsPath = process.env.API_DOCS_PATH ?? 'v1/user/docs';
 
   if (!admin.apps.length) {
     const firebaseCredential = readFirebaseServiceAccount();
@@ -35,7 +35,14 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix(apiPrefix);
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+    }),
+  );
+  app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
   const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((origin) =>
     origin.trim(),
@@ -60,4 +67,4 @@ async function bootstrap() {
   console.log(`Swagger docs   http://localhost:${port}/${docsPath}`);
 }
 
-bootstrap();
+void bootstrap();
