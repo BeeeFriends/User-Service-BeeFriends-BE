@@ -36,6 +36,8 @@ export class UserService {
     if (dto.displayName !== undefined) data.Username = dto.displayName;
     if (dto.description !== undefined) data.Description = dto.description;
     if (dto.phoneNumber !== undefined) data.PhoneNumber = dto.phoneNumber;
+    if (dto.gender !== undefined) data.Gender = dto.gender;
+    if (dto.age !== undefined) data.Age = dto.age;
     if (dto.campusId !== undefined) data.CampusID = dto.campusId;
     if (dto.majorId !== undefined) data.DepartmentID = dto.majorId;
     if (dto.binusianYear !== undefined) data.CodeYear = dto.binusianYear;
@@ -188,6 +190,8 @@ export class UserService {
       displayName: user.Username,
       binusianEmail: user.Email,
       phoneNumber: user.PhoneNumber,
+      gender: user.Gender,
+      age: user.Age,
       binusianYear: user.CodeYear,
       description: user.Description,
       profilePhotoUrl: user.ProfilePhotoUrl,

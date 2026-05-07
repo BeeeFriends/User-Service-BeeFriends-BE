@@ -12,6 +12,8 @@ type UserLike = {
   Username?: string | null;
   Email?: string | null;
   PhoneNumber?: string | null;
+  Gender?: string | null;
+  Age?: number | null;
   CodeYear?: number | null;
   Description?: string | null;
   ProfilePhotoUrl?: string | null;
@@ -72,6 +74,8 @@ export class UserEventPublisher {
           displayName: user.Username,
           binusianEmail: user.Email,
           phoneNumber: user.PhoneNumber,
+          gender: user.Gender,
+          age: user.Age,
           binusianYear: user.CodeYear,
           description: user.Description,
           profilePhotoUrl: user.ProfilePhotoUrl,

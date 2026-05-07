@@ -44,14 +44,14 @@ export class AuthController {
     FileFieldsInterceptor(
       [
         { name: 'profilePhoto', maxCount: 1 },
-        { name: 'photos', maxCount: 9 },
+        { name: 'photos', maxCount: 2 },
       ],
       {
         storage: memoryStorage(),
         fileFilter: imageFileFilter,
         limits: {
           fileSize: 5 * 1024 * 1024,
-          files: 10,
+          files: 3,
         },
       },
     ),
@@ -64,6 +64,8 @@ export class AuthController {
         'displayName',
         'binusianEmail',
         'phoneNumber',
+        'gender',
+        'age',
         'binusianYear',
         'campusId',
         'majorId',
@@ -84,6 +86,8 @@ export class AuthController {
             'Firebase ID token from frontend Firebase SDK. Use this instead of password for the Eldora-style flow.',
         },
         phoneNumber: { type: 'string', example: '+6281234567890' },
+        gender: { type: 'string', enum: ['Male', 'Female'], example: 'Male' },
+        age: { type: 'integer', example: 19, minimum: 17, maximum: 60 },
         binusianYear: { type: 'integer', example: 2024 },
         campusId: { type: 'integer', example: 1 },
         majorId: { type: 'integer', example: 1 },

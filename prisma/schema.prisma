@@ -13,6 +13,8 @@ model MsUser {
   Email           String        @unique @db.VarChar(255)
   FirebaseUID     String        @unique @db.VarChar(255)
   PhoneNumber     String        @db.VarChar(32)
+  Gender          String        @default("Male") @db.VarChar(16)
+  Age             Int           @default(18)
   ProfilePhotoUrl String        @db.VarChar(512)
   Description     String        @default("") @db.VarChar(512)
   CampusID        Int

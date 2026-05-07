@@ -2,12 +2,14 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { Storage } from '@google-cloud/storage';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
+import { Readable } from 'stream';
 import { readFirebaseServiceAccount } from '../../config/firebase-admin';
 
 export type UploadedBlob = {
@@ -155,6 +157,38 @@ export class StorageService {
     );
   }
 
+  async getObject(objectName: string) {
+    if (this.s3Client) {
+      const object = await this.s3Client.send(
+        new GetObjectCommand({
+          Bucket: this.bucketName,
+          Key: objectName,
+        }),
+      );
+
+      return {
+        body: object.Body as Readable,
+        contentType: object.ContentType ?? 'application/octet-stream',
+        cacheControl: object.CacheControl,
+      };
+    }
+
+    const [metadata] = await this.gcsStorage
+      .bucket(this.bucketName)
+      .file(objectName)
+      .getMetadata();
+    const body = this.gcsStorage
+      .bucket(this.bucketName)
+      .file(objectName)
+      .createReadStream();
+
+    return {
+      body,
+      contentType: metadata.contentType ?? 'application/octet-stream',
+      cacheControl: metadata.cacheControl,
+    };
+  }
+
   private buildObjectName(
     userEmail: string,
     file: Express.Multer.File,
@@ -175,10 +209,6 @@ export class StorageService {
   private getPublicUrl(objectName: string) {
     if (this.publicBaseUrl) {
       return `${this.publicBaseUrl.replace(/\/$/, '')}/${objectName}`;
-    }
-
-    if (this.s3Endpoint) {
-      return `${this.s3Endpoint.replace(/\/$/, '')}/${this.bucketName}/${objectName}`;
     }
 
     return `https://storage.googleapis.com/${this.bucketName}/${objectName}`;
