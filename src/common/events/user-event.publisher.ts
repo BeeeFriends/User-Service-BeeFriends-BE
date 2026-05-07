@@ -1,63 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type {
   CampusEventPayload,
+  CampusSyncSource,
   DepartmentEventPayload,
+  DepartmentSyncSource,
   HobbyEventPayload,
+  HobbySyncSource,
   UserEventPayload,
+  UserSyncSource,
 } from '@beefriends/shared-kernel';
 import { PUBSUB_CHANNELS, PubSubService } from '../pub-sub';
-
-type UserLike = {
-  UserID: number;
-  Username?: string | null;
-  Email?: string | null;
-  PhoneNumber?: string | null;
-  Gender?: string | null;
-  Age?: number | null;
-  CodeYear?: number | null;
-  Description?: string | null;
-  ProfilePhotoUrl?: string | null;
-  CampusID?: number | null;
-  DepartmentID?: number | null;
-  campus?: {
-    CampusID?: number | null;
-    CampusName?: string | null;
-    CampusAddress?: string | null;
-  } | null;
-  department?: {
-    DepartmentID?: number | null;
-    DepartmentName?: string | null;
-  } | null;
-  hobbies?: {
-    HobbyID?: number | null;
-    hobby?: {
-      HobbyID?: number | null;
-      HobbyName?: string | null;
-    } | null;
-  }[];
-  photos?: {
-    UserPhotoID?: number | null;
-    PhotoUrl?: string | null;
-    SortOrder?: number | null;
-    IsProfile?: boolean | null;
-  }[];
-};
-
-type HobbyLike = {
-  HobbyID: number;
-  HobbyName: string;
-};
-
-type CampusLike = {
-  CampusID: number;
-  CampusName: string;
-  CampusAddress?: string | null;
-};
-
-type DepartmentLike = {
-  DepartmentID: number;
-  DepartmentName: string;
-};
 
 @Injectable()
 export class UserEventPublisher {
@@ -65,7 +17,7 @@ export class UserEventPublisher {
 
   constructor(private readonly pubSub: PubSubService) {}
 
-  async publishUserSynced(user: UserLike) {
+  async publishUserSynced(user: UserSyncSource) {
     try {
       const payload = {
         type: 'user.synced',
@@ -112,7 +64,7 @@ export class UserEventPublisher {
     }
   }
 
-  async publishHobbySynced(hobby: HobbyLike) {
+  async publishHobbySynced(hobby: HobbySyncSource) {
     try {
       const payload = {
         type: 'hobby.synced',
@@ -131,7 +83,7 @@ export class UserEventPublisher {
     }
   }
 
-  async publishCampusSynced(campus: CampusLike) {
+  async publishCampusSynced(campus: CampusSyncSource) {
     try {
       const payload = {
         type: 'campus.synced',
@@ -153,7 +105,7 @@ export class UserEventPublisher {
     }
   }
 
-  async publishDepartmentSynced(department: DepartmentLike) {
+  async publishDepartmentSynced(department: DepartmentSyncSource) {
     try {
       const payload = {
         type: 'department.synced',
