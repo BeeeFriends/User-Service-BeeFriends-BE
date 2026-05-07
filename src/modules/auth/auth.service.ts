@@ -99,7 +99,6 @@ export class AuthService {
           CreatedBy: dto.binusianEmail,
           photos: {
             create: this.buildPhotoRows(
-              profilePhoto.url,
               galleryPhotos.map((photo) => photo.url),
               dto.binusianEmail,
             ),
@@ -312,16 +311,16 @@ export class AuthService {
   ) {
     if (!firebaseUid) return null;
 
-    const byFirebaseUid = await this.prisma.msUser.findUnique({
-      where: { FirebaseUID: firebaseUid },
+    const byFirebaseUid = await this.prisma.msUser.findFirst({
+      where: { FirebaseUID: firebaseUid, Stsrc: 'A' },
       include: this.userInclude,
     });
     if (byFirebaseUid) return byFirebaseUid;
 
     if (!email) return null;
 
-    const byEmail = await this.prisma.msUser.findUnique({
-      where: { Email: email },
+    const byEmail = await this.prisma.msUser.findFirst({
+      where: { Email: email, Stsrc: 'A' },
       include: this.userInclude,
     });
     if (!byEmail) return null;
@@ -364,16 +363,15 @@ export class AuthService {
   }
 
   private buildPhotoRows(
-    profilePhotoUrl: string,
     photoUrls: string[] = [],
     createdBy: string,
   ) {
-    const uniqueUrls = Array.from(new Set([profilePhotoUrl, ...photoUrls]));
+    const uniqueUrls = Array.from(new Set(photoUrls)).slice(0, 3);
 
     return uniqueUrls.map((photoUrl, index) => ({
       PhotoUrl: photoUrl,
       SortOrder: index,
-      IsProfile: photoUrl === profilePhotoUrl,
+      IsProfile: false,
       Stsrc: 'A',
       CreatedAt: new Date(),
       CreatedBy: createdBy,

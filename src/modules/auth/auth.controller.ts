@@ -44,14 +44,14 @@ export class AuthController {
     FileFieldsInterceptor(
       [
         { name: 'profilePhoto', maxCount: 1 },
-        { name: 'photos', maxCount: 2 },
+        { name: 'photos', maxCount: 3 },
       ],
       {
         storage: memoryStorage(),
         fileFilter: imageFileFilter,
         limits: {
           fileSize: 5 * 1024 * 1024,
-          files: 3,
+          files: 4,
         },
       },
     ),

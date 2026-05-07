@@ -15,8 +15,8 @@ export class UserService {
   ) {}
 
   async findById(id: number) {
-    const user = await this.prisma.msUser.findUnique({
-      where: { UserID: id },
+    const user = await this.prisma.msUser.findFirst({
+      where: { UserID: id, Stsrc: 'A' },
       include: this.userInclude,
     });
     if (!user) throw new NotFoundException('User not found');
@@ -87,13 +87,10 @@ export class UserService {
     });
     if (!currentUser) throw new NotFoundException('User not found');
 
-    const profilePhotoUrl = dto.profilePhotoUrl ?? currentUser.ProfilePhotoUrl;
     const galleryUrls =
       dto.photoUrls ??
-      currentUser.photos
-        .filter((photo) => !photo.IsProfile)
-        .map((photo) => photo.PhotoUrl);
-    const photoRows = this.buildPhotoRows(profilePhotoUrl, galleryUrls, userId);
+      currentUser.photos.map((photo) => photo.PhotoUrl);
+    const photoRows = this.buildPhotoRows(galleryUrls, userId);
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.profilePhotoUrl !== undefined || dto.photoUrls !== undefined) {
@@ -157,17 +154,16 @@ export class UserService {
   }
 
   private buildPhotoRows(
-    profilePhotoUrl: string,
     photoUrls: string[] = [],
     userId: number,
   ) {
-    const uniqueUrls = Array.from(new Set([profilePhotoUrl, ...photoUrls]));
+    const uniqueUrls = Array.from(new Set(photoUrls)).slice(0, 3);
 
     return uniqueUrls.map((photoUrl, index) => ({
       UserID: userId,
       PhotoUrl: photoUrl,
       SortOrder: index,
-      IsProfile: photoUrl === profilePhotoUrl,
+      IsProfile: false,
       Stsrc: 'A',
       CreatedAt: new Date(),
       CreatedBy: String(userId),
