@@ -13,6 +13,7 @@ import {
   RegisterDto,
 } from '@beefriends/shared-kernel/dto';
 import * as admin from 'firebase-admin';
+import { UserEventPublisher } from '@common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService, UploadedBlob } from '../storage/storage.service';
 
@@ -36,6 +37,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly storageService: StorageService,
+    private readonly userEventPublisher: UserEventPublisher,
   ) {}
 
   async register(dto: FirebaseRegisterDto, files: RegisterUploadFiles = {}) {
@@ -107,6 +109,7 @@ export class AuthService {
         include: this.userInclude,
       });
 
+      await this.userEventPublisher.publishUserSynced(user);
       return this.issueToken(user);
     } catch (error) {
       if (firebaseAccount?.created) {
@@ -177,7 +180,7 @@ export class AuthService {
     dto: FirebaseRegisterDto,
     profilePhotoUrl: string,
   ) {
-    const decoded = await this.verifyFirebaseIdToken(dto.firebaseIdToken!);
+    const decoded = await this.verifyFirebaseIdToken(dto.firebaseIdToken);
     const tokenEmail = decoded.email?.toLowerCase();
     const requestedEmail = dto.binusianEmail.toLowerCase();
 

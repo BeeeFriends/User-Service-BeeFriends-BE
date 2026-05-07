@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateHobbyDto } from '@beefriends/shared-kernel/dto';
+import { UserEventPublisher } from '@common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class HobbyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly userEventPublisher: UserEventPublisher,
+  ) {}
 
   findAll() {
     return this.prisma.msHobby.findMany({
@@ -21,8 +25,8 @@ export class HobbyService {
     return hobby;
   }
 
-  create(userId: number, dto: CreateHobbyDto) {
-    return this.prisma.msHobby.create({
+  async create(userId: number, dto: CreateHobbyDto) {
+    const hobby = await this.prisma.msHobby.create({
       data: {
         HobbyName: dto.hobbyName,
         Stsrc: 'A',
@@ -30,5 +34,9 @@ export class HobbyService {
         CreatedBy: String(userId),
       },
     });
+
+    await this.userEventPublisher.publishHobbySynced(hobby);
+
+    return hobby;
   }
 }

@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCampusDto } from '@beefriends/shared-kernel/dto';
+import { UserEventPublisher } from '@common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class CampusService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly userEventPublisher: UserEventPublisher,
+  ) {}
 
   findAll() {
     return this.prisma.msCampus.findMany({
@@ -21,8 +25,8 @@ export class CampusService {
     return campus;
   }
 
-  create(dto: CreateCampusDto) {
-    return this.prisma.msCampus.create({
+  async create(dto: CreateCampusDto) {
+    const campus = await this.prisma.msCampus.create({
       data: {
         CampusName: dto.campusName,
         CampusAddress: dto.campusAddress,
@@ -30,5 +34,9 @@ export class CampusService {
         CreatedAt: new Date(),
       },
     });
+
+    await this.userEventPublisher.publishCampusSynced(campus);
+
+    return campus;
   }
 }

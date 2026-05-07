@@ -1,5 +1,12 @@
 import { PrismaClient } from '@prisma/user-client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Client } from 'pg';
+import type {
+  CampusEventPayload,
+  DepartmentEventPayload,
+  HobbyEventPayload,
+  UserEventPayload,
+} from '@beefriends/shared-kernel';
 import 'dotenv/config';
 
 const adapter = new PrismaPg({
@@ -8,6 +15,12 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 const SEEDER = 'seeder';
+const PUBSUB_CHANNELS = {
+  CAMPUS_EVENTS: 'campus_events',
+  DEPARTMENT_EVENTS: 'department_events',
+  HOBBY_EVENTS: 'hobby_events',
+  USER_EVENTS: 'user_events',
+} as const;
 
 const campusSeeds = [
   {
@@ -302,12 +315,218 @@ async function seedHobbies(now: Date) {
   );
 }
 
+async function createPubSubClient() {
+  if (!process.env.PUBSUB_DATABASE_URL) {
+    console.warn('PUBSUB_DATABASE_URL is not set; skipping pubsub seed sync.');
+    return null;
+  }
+
+  const client = new Client({
+    connectionString: process.env.PUBSUB_DATABASE_URL,
+  });
+
+  try {
+    await client.connect();
+    await ensurePubSubTables(client);
+    return client;
+  } catch (error) {
+    console.warn(
+      `Could not connect to pubsub database; skipping pubsub seed sync: ${
+        (error as Error).message
+      }`,
+    );
+    await client.end().catch(() => undefined);
+    return null;
+  }
+}
+
+async function ensurePubSubTables(client: Client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS pubsub_events (
+      id BIGSERIAL PRIMARY KEY,
+      channel TEXT NOT NULL,
+      payload JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_pubsub_events_channel_id
+    ON pubsub_events (channel, id)
+  `);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS pubsub_offsets (
+      consumer_id TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      last_event_id BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (consumer_id, channel)
+    )
+  `);
+}
+
+async function publishPubSub(
+  client: Client,
+  channel: string,
+  payload: unknown,
+) {
+  const event = await client.query<{ id: string }>(
+    `
+      INSERT INTO pubsub_events (channel, payload)
+      VALUES ($1, $2::jsonb)
+      RETURNING id
+    `,
+    [channel, JSON.stringify(payload)],
+  );
+
+  await client.query('SELECT pg_notify($1, $2)', [
+    channel,
+    JSON.stringify({ eventId: event.rows[0].id }),
+  ]);
+}
+
+async function syncCampusesToPubSub(client: Client) {
+  const campuses = await prisma.msCampus.findMany({
+    where: { Stsrc: 'A' },
+    orderBy: { CampusID: 'asc' },
+  });
+
+  for (const campus of campuses) {
+    const payload = {
+      type: 'campus.synced',
+      campus: {
+        id: campus.CampusID,
+        name: campus.CampusName,
+        address: campus.CampusAddress,
+      },
+      timestamp: new Date().toISOString(),
+    } satisfies CampusEventPayload;
+
+    await publishPubSub(client, PUBSUB_CHANNELS.CAMPUS_EVENTS, payload);
+  }
+
+  console.log(`Published ${campuses.length} campuses to pubsub.`);
+}
+
+async function syncDepartmentsToPubSub(client: Client) {
+  const departments = await prisma.msDepartment.findMany({
+    where: { Stsrc: 'A' },
+    orderBy: { DepartmentID: 'asc' },
+  });
+
+  for (const department of departments) {
+    const payload = {
+      type: 'department.synced',
+      department: {
+        id: department.DepartmentID,
+        name: department.DepartmentName,
+      },
+      timestamp: new Date().toISOString(),
+    } satisfies DepartmentEventPayload;
+
+    await publishPubSub(client, PUBSUB_CHANNELS.DEPARTMENT_EVENTS, payload);
+  }
+
+  console.log(`Published ${departments.length} departments to pubsub.`);
+}
+
+async function syncHobbiesToPubSub(client: Client) {
+  const hobbies = await prisma.msHobby.findMany({
+    where: { Stsrc: 'A' },
+    orderBy: { HobbyID: 'asc' },
+  });
+
+  for (const hobby of hobbies) {
+    const payload = {
+      type: 'hobby.synced',
+      hobby: {
+        id: hobby.HobbyID,
+        name: hobby.HobbyName,
+      },
+      timestamp: new Date().toISOString(),
+    } satisfies HobbyEventPayload;
+
+    await publishPubSub(client, PUBSUB_CHANNELS.HOBBY_EVENTS, payload);
+  }
+
+  console.log(`Published ${hobbies.length} hobbies to pubsub.`);
+}
+
+async function syncUsersToPubSub(client: Client) {
+  const users = await prisma.msUser.findMany({
+    where: { Stsrc: 'A' },
+    include: {
+      campus: true,
+      department: true,
+      hobbies: {
+        where: { Stsrc: 'A' },
+        include: { hobby: true },
+        orderBy: { UserHobbyID: 'asc' },
+      },
+      photos: {
+        where: { Stsrc: 'A' },
+        orderBy: { SortOrder: 'asc' },
+      },
+    },
+    orderBy: { UserID: 'asc' },
+  });
+
+  for (const user of users) {
+    const payload = {
+      type: 'user.synced',
+      user: {
+        id: user.UserID,
+        displayName: user.Username,
+        binusianEmail: user.Email,
+        phoneNumber: user.PhoneNumber,
+        binusianYear: user.CodeYear,
+        description: user.Description,
+        profilePhotoUrl: user.ProfilePhotoUrl,
+        campusId: user.CampusID,
+        campusName: user.campus.CampusName,
+        campusAddress: user.campus.CampusAddress,
+        majorId: user.DepartmentID,
+        majorName: user.department.DepartmentName,
+        hobbies: user.hobbies.map((userHobby) => ({
+          id: userHobby.hobby.HobbyID,
+          name: userHobby.hobby.HobbyName,
+        })),
+        photos: user.photos.map((photo) => ({
+          id: photo.UserPhotoID,
+          url: photo.PhotoUrl,
+          sortOrder: photo.SortOrder,
+          isProfile: photo.IsProfile,
+        })),
+      },
+      timestamp: new Date().toISOString(),
+    } satisfies UserEventPayload;
+
+    await publishPubSub(client, PUBSUB_CHANNELS.USER_EVENTS, payload);
+  }
+
+  console.log(`Published ${users.length} users to pubsub.`);
+}
+
+async function syncSeedsToPubSub() {
+  const pubSubClient = await createPubSubClient();
+  if (!pubSubClient) return;
+
+  try {
+    await syncCampusesToPubSub(pubSubClient);
+    await syncDepartmentsToPubSub(pubSubClient);
+    await syncHobbiesToPubSub(pubSubClient);
+    await syncUsersToPubSub(pubSubClient);
+  } finally {
+    await pubSubClient.end();
+  }
+}
+
 async function main() {
   const now = new Date();
 
   await seedCampuses(now);
   await seedDepartments(now);
   await seedHobbies(now);
+  await syncSeedsToPubSub();
 }
 
 main()

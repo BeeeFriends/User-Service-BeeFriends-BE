@@ -4,11 +4,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
+import { UserEventPublisher } from '@common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly userEventPublisher: UserEventPublisher,
+  ) {}
 
   async findById(id: number) {
     const user = await this.prisma.msUser.findUnique({
@@ -52,6 +56,7 @@ export class UserService {
           include: this.userInclude,
         });
 
+    await this.userEventPublisher.publishUserSynced(user);
     return this.toProfileResponse(user);
   }
 

@@ -33,7 +33,7 @@ export class HobbyController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new hobby' })
-  create(@CurrentUser() user: any, @Body() dto: CreateHobbyDto) {
+  create(@CurrentUser() user: { userId: number }, @Body() dto: CreateHobbyDto) {
     return this.hobbyService.create(user.userId, dto);
   }
 }
