@@ -478,6 +478,8 @@ async function syncUsersToPubSub(client: Client) {
         displayName: user.Username,
         binusianEmail: user.Email,
         phoneNumber: user.PhoneNumber,
+        gender: user.Gender,
+        age: user.Age,
         binusianYear: user.CodeYear,
         description: user.Description,
         profilePhotoUrl: user.ProfilePhotoUrl,
