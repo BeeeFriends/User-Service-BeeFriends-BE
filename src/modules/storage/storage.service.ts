@@ -109,7 +109,7 @@ export class StorageService {
   async uploadUserPhoto(
     userEmail: string,
     file: Express.Multer.File,
-    folder: 'profile' | 'gallery',
+    folder: 'profile' | 'gallery' | 'chat',
   ): Promise<UploadedBlob> {
     if (!file) {
       throw new BadRequestException('Photo file is required');
@@ -192,7 +192,7 @@ export class StorageService {
   private buildObjectName(
     userEmail: string,
     file: Express.Multer.File,
-    folder: 'profile' | 'gallery',
+    folder: 'profile' | 'gallery' | 'chat',
   ) {
     const safeEmail = userEmail.toLowerCase().replace(/[^a-z0-9]/g, '-');
     const extension =

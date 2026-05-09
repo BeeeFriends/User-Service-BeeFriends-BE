@@ -6,12 +6,14 @@ import {
 import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
 import { UserEventPublisher } from '@common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class UserService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly userEventPublisher: UserEventPublisher,
+    private readonly storageService: StorageService,
   ) {}
 
   async findById(id: number) {
@@ -60,6 +62,17 @@ export class UserService {
 
     await this.userEventPublisher.publishUserSynced(user);
     return this.toProfileResponse(user);
+  }
+
+  async uploadChatAttachment(userId: number, file: Express.Multer.File) {
+    const user = await this.prisma.msUser.findFirst({
+      where: { UserID: userId, Stsrc: 'A' },
+      select: { Email: true },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    return this.storageService.uploadUserPhoto(user.Email, file, 'chat');
   }
 
   private readonly userInclude = {
