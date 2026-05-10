@@ -75,6 +75,21 @@ export class UserService {
     return this.storageService.uploadUserPhoto(user.Email, file, 'chat');
   }
 
+  async uploadProfilePhoto(
+    userId: number,
+    file: Express.Multer.File,
+    kind: 'profile' | 'gallery',
+  ) {
+    const user = await this.prisma.msUser.findFirst({
+      where: { UserID: userId, Stsrc: 'A' },
+      select: { Email: true },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    return this.storageService.uploadUserPhoto(user.Email, file, kind);
+  }
+
   private readonly userInclude = {
     campus: true,
     department: true,

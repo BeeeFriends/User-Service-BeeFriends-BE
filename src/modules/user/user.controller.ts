@@ -86,6 +86,42 @@ export class UserController {
     return this.userService.uploadChatAttachment(user.userId, image);
   }
 
+  @Post('me/photos')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: memoryStorage(),
+      fileFilter: imageFileFilter,
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+        files: 1,
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['image'],
+      properties: {
+        image: { type: 'string', format: 'binary' },
+        kind: { type: 'string', enum: ['profile', 'gallery'] },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Upload an image for profile photos' })
+  uploadProfilePhoto(
+    @CurrentUser() user: any,
+    @UploadedFile() image?: Express.Multer.File,
+    @Body('kind') kind?: string,
+  ) {
+    if (!image) throw new BadRequestException('Image file is required');
+    return this.userService.uploadProfilePhoto(
+      user.userId,
+      image,
+      kind === 'profile' ? 'profile' : 'gallery',
+    );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get user by ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
