@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/user-client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { Client } from 'pg';
+import { createClient } from 'redis';
 import type {
   CampusEventPayload,
   DepartmentEventPayload,
@@ -16,11 +16,13 @@ const prisma = new PrismaClient({ adapter });
 
 const SEEDER = 'seeder';
 const PUBSUB_CHANNELS = {
-  CAMPUS_EVENTS: 'campus_events',
-  DEPARTMENT_EVENTS: 'department_events',
-  HOBBY_EVENTS: 'hobby_events',
-  USER_EVENTS: 'user_events',
+  CAMPUS_EVENTS: 'beefriends:campus-events',
+  DEPARTMENT_EVENTS: 'beefriends:department-events',
+  HOBBY_EVENTS: 'beefriends:hobby-events',
+  USER_EVENTS: 'beefriends:user-events',
 } as const;
+const REDIS_STREAM_MAXLEN = 10000;
+type RedisClient = ReturnType<typeof createClient>;
 
 const campusSeeds = [
   {
@@ -316,75 +318,49 @@ async function seedHobbies(now: Date) {
 }
 
 async function createPubSubClient() {
-  if (!process.env.PUBSUB_DATABASE_URL) {
-    console.warn('PUBSUB_DATABASE_URL is not set; skipping pubsub seed sync.');
+  if (!process.env.REDIS_URL) {
+    console.warn('REDIS_URL is not set; skipping pubsub seed sync.');
     return null;
   }
 
-  const client = new Client({
-    connectionString: process.env.PUBSUB_DATABASE_URL,
-  });
+  const client = createClient({ url: process.env.REDIS_URL });
 
   try {
     await client.connect();
-    await ensurePubSubTables(client);
     return client;
   } catch (error) {
     console.warn(
-      `Could not connect to pubsub database; skipping pubsub seed sync: ${
+      `Could not connect to redis pubsub; skipping pubsub seed sync: ${
         (error as Error).message
       }`,
     );
-    await client.end().catch(() => undefined);
+    await client.quit().catch(() => client.destroy());
     return null;
   }
 }
 
-async function ensurePubSubTables(client: Client) {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS pubsub_events (
-      id BIGSERIAL PRIMARY KEY,
-      channel TEXT NOT NULL,
-      payload JSONB NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_pubsub_events_channel_id
-    ON pubsub_events (channel, id)
-  `);
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS pubsub_offsets (
-      consumer_id TEXT NOT NULL,
-      channel TEXT NOT NULL,
-      last_event_id BIGINT NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY (consumer_id, channel)
-    )
-  `);
-}
-
 async function publishPubSub(
-  client: Client,
+  client: RedisClient,
   channel: string,
   payload: unknown,
 ) {
-  const event = await client.query<{ id: string }>(
-    `
-      INSERT INTO pubsub_events (channel, payload)
-      VALUES ($1, $2::jsonb)
-      RETURNING id
-    `,
-    [channel, JSON.stringify(payload)],
-  );
-
-  await client.query('SELECT pg_notify($1, $2)', [
+  const serializedPayload = JSON.stringify(payload);
+  await client.xAdd(
     channel,
-    JSON.stringify({ eventId: event.rows[0].id }),
-  ]);
+    '*',
+    { payload: serializedPayload },
+    {
+      TRIM: {
+        strategy: 'MAXLEN',
+        strategyModifier: '~',
+        threshold: REDIS_STREAM_MAXLEN,
+      },
+    },
+  );
+  await client.publish(channel, serializedPayload);
 }
 
-async function syncCampusesToPubSub(client: Client) {
+async function syncCampusesToPubSub(client: RedisClient) {
   const campuses = await prisma.msCampus.findMany({
     where: { Stsrc: 'A' },
     orderBy: { CampusID: 'asc' },
@@ -407,7 +383,7 @@ async function syncCampusesToPubSub(client: Client) {
   console.log(`Published ${campuses.length} campuses to pubsub.`);
 }
 
-async function syncDepartmentsToPubSub(client: Client) {
+async function syncDepartmentsToPubSub(client: RedisClient) {
   const departments = await prisma.msDepartment.findMany({
     where: { Stsrc: 'A' },
     orderBy: { DepartmentID: 'asc' },
@@ -429,7 +405,7 @@ async function syncDepartmentsToPubSub(client: Client) {
   console.log(`Published ${departments.length} departments to pubsub.`);
 }
 
-async function syncHobbiesToPubSub(client: Client) {
+async function syncHobbiesToPubSub(client: RedisClient) {
   const hobbies = await prisma.msHobby.findMany({
     where: { Stsrc: 'A' },
     orderBy: { HobbyID: 'asc' },
@@ -451,7 +427,7 @@ async function syncHobbiesToPubSub(client: Client) {
   console.log(`Published ${hobbies.length} hobbies to pubsub.`);
 }
 
-async function syncUsersToPubSub(client: Client) {
+async function syncUsersToPubSub(client: RedisClient) {
   const users = await prisma.msUser.findMany({
     where: { Stsrc: 'A' },
     include: {
@@ -518,7 +494,7 @@ async function syncSeedsToPubSub() {
     await syncHobbiesToPubSub(pubSubClient);
     await syncUsersToPubSub(pubSubClient);
   } finally {
-    await pubSubClient.end();
+    await pubSubClient.quit().catch(() => pubSubClient.destroy());
   }
 }
 

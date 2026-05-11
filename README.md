@@ -61,7 +61,7 @@ BeeFriends Mobile
       -> PostgreSQL
       -> Firebase Admin
       -> Object Storage
-      -> PostgreSQL pub/sub channels
+      -> Redis Streams / Pub/Sub
 ```
 
 The service publishes sync events that the Match Chat service consumes to keep match profile data fresh.
@@ -77,7 +77,8 @@ API_DOCS_PATH=v1/user/docs
 CORS_ORIGINS=*
 
 USER_DATABASE_URL=
-PUBSUB_DATABASE_URL=
+REDIS_URL=
+REDIS_STREAM_MAXLEN=10000
 JWT_SECRET=
 
 FIREBASE_WEB_API_KEY=
