@@ -7,6 +7,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from '@/modules/auth/auth.controller';
 
 // Provider
+import { AuthRepository } from '@/modules/auth/auth.repository';
 import { AuthService } from '@/modules/auth/auth.service';
 import { JwtStrategy } from '@/modules/auth/strategies/jwt.strategy';
 
@@ -15,11 +16,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 // Feature
 import { StorageModule } from '@/modules/storage/storage.module';
+import { ProfileReferencesModule } from '@common';
 
 @Module({
   imports: [
     PassportModule,
     StorageModule,
+    ProfileReferencesModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -32,6 +35,6 @@ import { StorageModule } from '@/modules/storage/storage.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, AuthRepository, JwtStrategy],
 })
 export class AuthModule {}

@@ -5,10 +5,11 @@ import { Module } from '@nestjs/common';
 import { HobbyController } from '@/modules/hobby/hobby.controller';
 
 // Service
+import { HobbyRepository } from '@/modules/hobby/hobby.repository';
 import { HobbyService } from '@/modules/hobby/hobby.service';
 
 @Module({
   controllers: [HobbyController],
-  providers: [HobbyService],
+  providers: [HobbyService, HobbyRepository],
 })
 export class HobbyModule {}

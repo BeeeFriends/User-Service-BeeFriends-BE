@@ -3,8 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as admin from 'firebase-admin';
 import { HttpExceptionFilter, ResponseInterceptor } from '@common';
-import { AppModule } from './app.module';
-import { readFirebaseServiceAccount } from './config/firebase-admin';
+import { AppModule } from '@/app.module';
+import { readFirebaseServiceAccount } from '@/config/firebase-admin';
 
 async function bootstrap() {
   const apiPrefix = process.env.API_PREFIX ?? 'v1/user';

@@ -6,39 +6,27 @@ import { UserEventPublisher } from '@common';
 import { CreateCampusDto } from '@beefriends/shared-kernel/dto';
 
 // Service
-import { PrismaService } from '@/prisma/prisma.service';
+import { CampusRepository } from '@/modules/campus/campus.repository';
 
 @Injectable()
 export class CampusService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly campusRepository: CampusRepository,
     private readonly userEventPublisher: UserEventPublisher,
   ) {}
 
   findAll() {
-    return this.prisma.msCampus.findMany({
-      where: { Stsrc: 'A' },
-      orderBy: { CampusName: 'asc' },
-    });
+    return this.campusRepository.findAllActive();
   }
 
   async findOne(id: number) {
-    const campus = await this.prisma.msCampus.findUnique({
-      where: { CampusID: id },
-    });
+    const campus = await this.campusRepository.findById(id);
     if (!campus) throw new NotFoundException('Campus not found');
     return campus;
   }
 
   async create(dto: CreateCampusDto) {
-    const campus = await this.prisma.msCampus.create({
-      data: {
-        CampusName: dto.campusName,
-        CampusAddress: dto.campusAddress,
-        Stsrc: 'A',
-        CreatedAt: new Date(),
-      },
-    });
+    const campus = await this.campusRepository.create(dto);
 
     await this.userEventPublisher.publishCampusSynced(campus);
 

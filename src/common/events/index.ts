@@ -1,2 +1,2 @@
-export * from './user-event.publisher';
-export * from './user-events.module';
+export * from '@/common/events/user-event.publisher';
+export * from '@/common/events/user-events.module';

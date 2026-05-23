@@ -1,41 +1,47 @@
 // Module
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { UserEventPublisher } from '@common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ProfileReferenceService, UserEventPublisher } from '@common';
 
 // DTO
 import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
 
 // Service
-import { PrismaService } from '@/prisma/prisma.service';
 import { StorageService } from '@/modules/storage/storage.service';
+import {
+  CreateUserHobbyRow,
+  CreateUserPhotoRow,
+  UpdateUserProfileData,
+  UserRepository,
+} from '@/modules/user/user.repository';
+import { toProfileResponse } from '@/modules/user/user-profile.mapper';
 
 @Injectable()
 export class UserService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly userRepository: UserRepository,
     private readonly userEventPublisher: UserEventPublisher,
     private readonly storageService: StorageService,
+    private readonly profileReferenceService: ProfileReferenceService,
   ) {}
 
   async findById(id: number) {
-    const user = await this.prisma.msUser.findFirst({
-      where: { UserID: id, Stsrc: 'A' },
-      include: this.userInclude,
-    });
+    const user = await this.userRepository.findActiveProfileById(id);
     if (!user) throw new NotFoundException('User not found');
-    return this.toProfileResponse(user);
+    return toProfileResponse(user);
   }
 
   async updateMe(userId: number, dto: UpdateUserDto) {
-    if (dto.campusId !== undefined) await this.ensureCampusExists(dto.campusId);
-    if (dto.majorId !== undefined) await this.ensureMajorExists(dto.majorId);
-    if (dto.hobbyIds !== undefined) await this.ensureHobbiesExist(dto.hobbyIds);
+    if (dto.campusId !== undefined) {
+      await this.profileReferenceService.ensureCampusExists(dto.campusId);
+    }
+    if (dto.majorId !== undefined) {
+      await this.profileReferenceService.ensureMajorExists(dto.majorId);
+    }
+    if (dto.hobbyIds !== undefined) {
+      await this.profileReferenceService.ensureHobbiesExist(dto.hobbyIds);
+    }
 
-    const data: any = {
+    const data: UpdateUserProfileData = {
       UpdatedAt: new Date(),
       UpdatedBy: String(userId),
     };
@@ -59,21 +65,14 @@ export class UserService {
 
     const user = shouldRefreshRelations
       ? await this.updateProfileRelations(userId, data, dto)
-      : await this.prisma.msUser.update({
-          where: { UserID: userId },
-          data,
-          include: this.userInclude,
-        });
+      : await this.userRepository.updateProfile(userId, data);
 
     await this.userEventPublisher.publishUserSynced(user);
-    return this.toProfileResponse(user);
+    return toProfileResponse(user);
   }
 
   async uploadChatAttachment(userId: number, file: Express.Multer.File) {
-    const user = await this.prisma.msUser.findFirst({
-      where: { UserID: userId, Stsrc: 'A' },
-      select: { Email: true },
-    });
+    const user = await this.userRepository.findActiveEmailById(userId);
 
     if (!user) throw new NotFoundException('User not found');
 
@@ -85,107 +84,42 @@ export class UserService {
     file: Express.Multer.File,
     kind: 'profile' | 'gallery',
   ) {
-    const user = await this.prisma.msUser.findFirst({
-      where: { UserID: userId, Stsrc: 'A' },
-      select: { Email: true },
-    });
+    const user = await this.userRepository.findActiveEmailById(userId);
 
     if (!user) throw new NotFoundException('User not found');
 
     return this.storageService.uploadUserPhoto(user.Email, file, kind);
   }
 
-  private readonly userInclude = {
-    campus: true,
-    department: true,
-    hobbies: {
-      where: { Stsrc: 'A' },
-      include: { hobby: true },
-      orderBy: { UserHobbyID: 'asc' as const },
-    },
-    photos: {
-      where: { Stsrc: 'A' },
-      orderBy: { SortOrder: 'asc' as const },
-    },
-  };
-
   private async updateProfileRelations(
     userId: number,
-    data: Record<string, any>,
+    data: UpdateUserProfileData,
     dto: UpdateUserDto,
   ) {
-    const currentUser = await this.prisma.msUser.findUnique({
-      where: { UserID: userId },
-      include: this.userInclude,
-    });
+    const currentUser = await this.userRepository.findProfileById(userId);
     if (!currentUser) throw new NotFoundException('User not found');
 
     const galleryUrls =
       dto.photoUrls ?? currentUser.photos.map((photo) => photo.PhotoUrl);
     const photoRows = this.buildPhotoRows(galleryUrls, userId);
 
-    return this.prisma.$transaction(async (tx) => {
-      if (dto.profilePhotoUrl !== undefined || dto.photoUrls !== undefined) {
-        await tx.trUserPhoto.updateMany({
-          where: { UserID: userId, Stsrc: 'A' },
-          data: {
-            Stsrc: 'D',
-            UpdatedAt: new Date(),
-            UpdatedBy: String(userId),
-          },
-        });
-
-        if (photoRows.length) {
-          await tx.trUserPhoto.createMany({ data: photoRows });
-        }
-      }
-
-      if (dto.hobbyIds !== undefined) {
-        await tx.trUserHobby.deleteMany({
-          where: { UserID: userId },
-        });
-
-        const hobbyRows = this.buildUserHobbyRows(dto.hobbyIds, userId);
-        if (hobbyRows.length) {
-          await tx.trUserHobby.createMany({ data: hobbyRows });
-        }
-      }
-
-      return tx.msUser.update({
-        where: { UserID: userId },
-        data,
-        include: this.userInclude,
-      });
+    return this.userRepository.replaceProfileRelations(userId, {
+      data,
+      replacePhotos:
+        dto.profilePhotoUrl !== undefined || dto.photoUrls !== undefined,
+      photoRows,
+      replaceHobbies: dto.hobbyIds !== undefined,
+      hobbyRows:
+        dto.hobbyIds !== undefined
+          ? this.buildUserHobbyRows(dto.hobbyIds, userId)
+          : [],
     });
   }
 
-  private async ensureCampusExists(campusId: number) {
-    const campus = await this.prisma.msCampus.findFirst({
-      where: { CampusID: campusId, Stsrc: 'A' },
-    });
-    if (!campus) throw new BadRequestException('Campus not found');
-  }
-
-  private async ensureMajorExists(majorId: number) {
-    const major = await this.prisma.msDepartment.findFirst({
-      where: { DepartmentID: majorId, Stsrc: 'A' },
-    });
-    if (!major) throw new BadRequestException('Major not found');
-  }
-
-  private async ensureHobbiesExist(hobbyIds: number[]) {
-    const uniqueHobbyIds = Array.from(new Set(hobbyIds));
-    const hobbies = await this.prisma.msHobby.findMany({
-      where: { HobbyID: { in: uniqueHobbyIds }, Stsrc: 'A' },
-      select: { HobbyID: true },
-    });
-
-    if (hobbies.length !== uniqueHobbyIds.length) {
-      throw new BadRequestException('One or more hobbies were not found');
-    }
-  }
-
-  private buildPhotoRows(photoUrls: string[] = [], userId: number) {
+  private buildPhotoRows(
+    photoUrls: string[] = [],
+    userId: number,
+  ): CreateUserPhotoRow[] {
     const uniqueUrls = Array.from(new Set(photoUrls)).slice(0, 3);
 
     return uniqueUrls.map((photoUrl, index) => ({
@@ -199,7 +133,10 @@ export class UserService {
     }));
   }
 
-  private buildUserHobbyRows(hobbyIds: number[], userId: number) {
+  private buildUserHobbyRows(
+    hobbyIds: number[],
+    userId: number,
+  ): CreateUserHobbyRow[] {
     return Array.from(new Set(hobbyIds)).map((hobbyId) => ({
       UserID: userId,
       HobbyID: hobbyId,
@@ -207,44 +144,5 @@ export class UserService {
       CreatedAt: new Date(),
       CreatedBy: String(userId),
     }));
-  }
-
-  private toProfileResponse(user: any) {
-    return {
-      id: user.UserID,
-      displayName: user.Username,
-      binusianEmail: user.Email,
-      phoneNumber: user.PhoneNumber,
-      gender: user.Gender,
-      age: user.Age,
-      binusianYear: user.CodeYear,
-      description: user.Description,
-      profilePhotoUrl: user.ProfilePhotoUrl,
-      campus: user.campus
-        ? {
-            id: user.campus.CampusID,
-            name: user.campus.CampusName,
-            address: user.campus.CampusAddress,
-          }
-        : null,
-      major: user.department
-        ? {
-            id: user.department.DepartmentID,
-            name: user.department.DepartmentName,
-          }
-        : null,
-      hobbies:
-        user.hobbies?.map((userHobby) => ({
-          id: userHobby.hobby.HobbyID,
-          name: userHobby.hobby.HobbyName,
-        })) ?? [],
-      photos:
-        user.photos?.map((photo) => ({
-          id: photo.UserPhotoID,
-          url: photo.PhotoUrl,
-          sortOrder: photo.SortOrder,
-          isProfile: photo.IsProfile,
-        })) ?? [],
-    };
   }
 }

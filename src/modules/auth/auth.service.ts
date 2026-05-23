@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as admin from 'firebase-admin';
-import { UserEventPublisher } from '@common';
+import { ProfileReferenceService, UserEventPublisher } from '@common';
 
 // DTO
 import {
@@ -19,11 +19,13 @@ import {
 } from '@beefriends/shared-kernel/dto';
 
 // Service
-import { PrismaService } from '@/prisma/prisma.service';
 import {
   StorageService,
   UploadedBlob,
 } from '@/modules/storage/storage.service';
+import { AuthRepository } from '@/modules/auth/auth.repository';
+import { toProfileResponse } from '@/modules/user/user-profile.mapper';
+import type { UserProfile } from '@/modules/user/user-profile.prisma';
 
 // Types
 import type {
@@ -34,22 +36,21 @@ import type {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly authRepository: AuthRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly storageService: StorageService,
     private readonly userEventPublisher: UserEventPublisher,
+    private readonly profileReferenceService: ProfileReferenceService,
   ) {}
 
   async register(dto: FirebaseRegisterDto, files: RegisterUploadFiles = {}) {
-    const existing = await this.prisma.msUser.findUnique({
-      where: { Email: dto.binusianEmail },
-    });
+    const existing = await this.authRepository.findByEmail(dto.binusianEmail);
     if (existing) throw new ConflictException('Email already registered');
 
-    await this.ensureCampusExists(dto.campusId);
-    await this.ensureMajorExists(dto.majorId);
-    await this.ensureHobbiesExist(dto.hobbyIds);
+    await this.profileReferenceService.ensureCampusExists(dto.campusId);
+    await this.profileReferenceService.ensureMajorExists(dto.majorId);
+    await this.profileReferenceService.ensureHobbiesExist(dto.hobbyIds);
 
     const profilePhotoFile = files.profilePhoto?.[0];
     if (!profilePhotoFile) {
@@ -82,33 +83,30 @@ export class AuthService {
 
       firebaseAccount = await this.resolveFirebaseUser(dto, profilePhoto.url);
 
-      const user = await this.prisma.msUser.create({
-        data: {
-          Username: dto.displayName,
-          Email: dto.binusianEmail,
-          FirebaseUID: firebaseAccount.user.uid,
-          PhoneNumber: dto.phoneNumber,
-          Gender: dto.gender,
-          Age: dto.age,
-          ProfilePhotoUrl: profilePhoto.url,
-          Description: dto.description ?? '',
-          CampusID: dto.campusId,
-          DepartmentID: dto.majorId,
-          CodeYear: dto.binusianYear,
-          Stsrc: 'A',
-          CreatedAt: new Date(),
-          CreatedBy: dto.binusianEmail,
-          photos: {
-            create: this.buildPhotoRows(
-              galleryPhotos.map((photo) => photo.url),
-              dto.binusianEmail,
-            ),
-          },
-          hobbies: {
-            create: this.buildHobbyRows(dto.hobbyIds, dto.binusianEmail),
-          },
+      const user = await this.authRepository.createUser({
+        Username: dto.displayName,
+        Email: dto.binusianEmail,
+        FirebaseUID: firebaseAccount.user.uid,
+        PhoneNumber: dto.phoneNumber,
+        Gender: dto.gender,
+        Age: dto.age,
+        ProfilePhotoUrl: profilePhoto.url,
+        Description: dto.description ?? '',
+        CampusID: dto.campusId,
+        DepartmentID: dto.majorId,
+        CodeYear: dto.binusianYear,
+        Stsrc: 'A',
+        CreatedAt: new Date(),
+        CreatedBy: dto.binusianEmail,
+        photos: {
+          create: this.buildPhotoRows(
+            galleryPhotos.map((photo) => photo.url),
+            dto.binusianEmail,
+          ),
         },
-        include: this.userInclude,
+        hobbies: {
+          create: this.buildHobbyRows(dto.hobbyIds, dto.binusianEmail),
+        },
       });
 
       await this.userEventPublisher.publishUserSynced(user);
@@ -147,20 +145,6 @@ export class AuthService {
     return this.issueToken(user);
   }
 
-  private readonly userInclude = {
-    campus: true,
-    department: true,
-    hobbies: {
-      where: { Stsrc: 'A' },
-      include: { hobby: true },
-      orderBy: { UserHobbyID: 'asc' as const },
-    },
-    photos: {
-      where: { Stsrc: 'A' },
-      orderBy: { SortOrder: 'asc' as const },
-    },
-  };
-
   private async resolveFirebaseUser(
     dto: FirebaseRegisterDto,
     profilePhotoUrl: string,
@@ -196,9 +180,7 @@ export class AuthService {
       );
     }
 
-    const linkedUser = await this.prisma.msUser.findUnique({
-      where: { FirebaseUID: decoded.uid },
-    });
+    const linkedUser = await this.authRepository.findByFirebaseUid(decoded.uid);
     if (linkedUser) {
       throw new ConflictException('Firebase account already registered');
     }
@@ -227,9 +209,9 @@ export class AuthService {
 
       const firebaseUser = await admin.auth().getUserByEmail(dto.binusianEmail);
       if (firebaseUser.uid) {
-        const linkedUser = await this.prisma.msUser.findUnique({
-          where: { FirebaseUID: firebaseUser.uid },
-        });
+        const linkedUser = await this.authRepository.findByFirebaseUid(
+          firebaseUser.uid,
+        );
         if (linkedUser) {
           throw new ConflictException('Email already registered');
         }
@@ -312,55 +294,20 @@ export class AuthService {
   ) {
     if (!firebaseUid) return null;
 
-    const byFirebaseUid = await this.prisma.msUser.findFirst({
-      where: { FirebaseUID: firebaseUid, Stsrc: 'A' },
-      include: this.userInclude,
-    });
+    const byFirebaseUid =
+      await this.authRepository.findActiveProfileByFirebaseUid(firebaseUid);
     if (byFirebaseUid) return byFirebaseUid;
 
     if (!email) return null;
 
-    const byEmail = await this.prisma.msUser.findFirst({
-      where: { Email: email, Stsrc: 'A' },
-      include: this.userInclude,
-    });
+    const byEmail = await this.authRepository.findActiveProfileByEmail(email);
     if (!byEmail) return null;
 
-    return this.prisma.msUser.update({
-      where: { UserID: byEmail.UserID },
-      data: {
-        FirebaseUID: firebaseUid,
-        UpdatedAt: new Date(),
-        UpdatedBy: email,
-      },
-      include: this.userInclude,
-    });
-  }
-
-  private async ensureCampusExists(campusId: number) {
-    const campus = await this.prisma.msCampus.findFirst({
-      where: { CampusID: campusId, Stsrc: 'A' },
-    });
-    if (!campus) throw new BadRequestException('Campus not found');
-  }
-
-  private async ensureMajorExists(majorId: number) {
-    const major = await this.prisma.msDepartment.findFirst({
-      where: { DepartmentID: majorId, Stsrc: 'A' },
-    });
-    if (!major) throw new BadRequestException('Major not found');
-  }
-
-  private async ensureHobbiesExist(hobbyIds: number[]) {
-    const uniqueHobbyIds = Array.from(new Set(hobbyIds));
-    const hobbies = await this.prisma.msHobby.findMany({
-      where: { HobbyID: { in: uniqueHobbyIds }, Stsrc: 'A' },
-      select: { HobbyID: true },
-    });
-
-    if (hobbies.length !== uniqueHobbyIds.length) {
-      throw new BadRequestException('One or more hobbies were not found');
-    }
+    return this.authRepository.linkFirebaseUid(
+      byEmail.UserID,
+      firebaseUid,
+      email,
+    );
   }
 
   private buildPhotoRows(photoUrls: string[] = [], createdBy: string) {
@@ -385,7 +332,7 @@ export class AuthService {
     }));
   }
 
-  private issueToken(user: any) {
+  private issueToken(user: UserProfile) {
     const payload = {
       sub: user.UserID,
       username: user.Username,
@@ -393,42 +340,7 @@ export class AuthService {
     };
     return {
       access_token: this.jwtService.sign(payload),
-      user: {
-        id: user.UserID,
-        displayName: user.Username,
-        binusianEmail: user.Email,
-        phoneNumber: user.PhoneNumber,
-        gender: user.Gender,
-        age: user.Age,
-        binusianYear: user.CodeYear,
-        description: user.Description,
-        profilePhotoUrl: user.ProfilePhotoUrl,
-        campus: user.campus
-          ? {
-              id: user.campus.CampusID,
-              name: user.campus.CampusName,
-              address: user.campus.CampusAddress,
-            }
-          : null,
-        major: user.department
-          ? {
-              id: user.department.DepartmentID,
-              name: user.department.DepartmentName,
-            }
-          : null,
-        hobbies:
-          user.hobbies?.map((userHobby) => ({
-            id: userHobby.hobby.HobbyID,
-            name: userHobby.hobby.HobbyName,
-          })) ?? [],
-        photos:
-          user.photos?.map((photo) => ({
-            id: photo.UserPhotoID,
-            url: photo.PhotoUrl,
-            sortOrder: photo.SortOrder,
-            isProfile: photo.IsProfile,
-          })) ?? [],
-      },
+      user: toProfileResponse(user),
     };
   }
 }

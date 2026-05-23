@@ -5,10 +5,11 @@ import { Module } from '@nestjs/common';
 import { DepartmentController } from '@/modules/department/department.controller';
 
 // Service
+import { DepartmentRepository } from '@/modules/department/department.repository';
 import { DepartmentService } from '@/modules/department/department.service';
 
 @Module({
   controllers: [DepartmentController],
-  providers: [DepartmentService],
+  providers: [DepartmentService, DepartmentRepository],
 })
 export class DepartmentModule {}
