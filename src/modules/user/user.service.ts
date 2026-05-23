@@ -8,12 +8,14 @@ import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
 // Service
 import { StorageService } from '@/modules/storage/storage.service';
 import {
-  CreateUserHobbyRow,
-  CreateUserPhotoRow,
   UpdateUserProfileData,
   UserRepository,
 } from '@/modules/user/user.repository';
 import { toProfileResponse } from '@/modules/user/user-profile.mapper';
+import {
+  buildUserHobbyCreateRows,
+  buildUserPhotoCreateRows,
+} from '@/modules/user/user-profile-relations.mapper';
 
 @Injectable()
 export class UserService {
@@ -101,7 +103,7 @@ export class UserService {
 
     const galleryUrls =
       dto.photoUrls ?? currentUser.photos.map((photo) => photo.PhotoUrl);
-    const photoRows = this.buildPhotoRows(galleryUrls, userId);
+    const photoRows = buildUserPhotoCreateRows(galleryUrls, userId);
 
     return this.userRepository.replaceProfileRelations(userId, {
       data,
@@ -111,38 +113,8 @@ export class UserService {
       replaceHobbies: dto.hobbyIds !== undefined,
       hobbyRows:
         dto.hobbyIds !== undefined
-          ? this.buildUserHobbyRows(dto.hobbyIds, userId)
+          ? buildUserHobbyCreateRows(dto.hobbyIds, userId)
           : [],
     });
-  }
-
-  private buildPhotoRows(
-    photoUrls: string[] = [],
-    userId: number,
-  ): CreateUserPhotoRow[] {
-    const uniqueUrls = Array.from(new Set(photoUrls)).slice(0, 3);
-
-    return uniqueUrls.map((photoUrl, index) => ({
-      UserID: userId,
-      PhotoUrl: photoUrl,
-      SortOrder: index,
-      IsProfile: false,
-      Stsrc: 'A',
-      CreatedAt: new Date(),
-      CreatedBy: String(userId),
-    }));
-  }
-
-  private buildUserHobbyRows(
-    hobbyIds: number[],
-    userId: number,
-  ): CreateUserHobbyRow[] {
-    return Array.from(new Set(hobbyIds)).map((hobbyId) => ({
-      UserID: userId,
-      HobbyID: hobbyId,
-      Stsrc: 'A',
-      CreatedAt: new Date(),
-      CreatedBy: String(userId),
-    }));
   }
 }

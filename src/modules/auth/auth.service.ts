@@ -25,6 +25,10 @@ import {
 } from '@/modules/storage/storage.service';
 import { AuthRepository } from '@/modules/auth/auth.repository';
 import { toProfileResponse } from '@/modules/user/user-profile.mapper';
+import {
+  buildNestedUserHobbyCreates,
+  buildNestedUserPhotoCreates,
+} from '@/modules/user/user-profile-relations.mapper';
 import type { UserProfile } from '@/modules/user/user-profile.prisma';
 
 // Types
@@ -99,13 +103,13 @@ export class AuthService {
         CreatedAt: new Date(),
         CreatedBy: dto.binusianEmail,
         photos: {
-          create: this.buildPhotoRows(
+          create: buildNestedUserPhotoCreates(
             galleryPhotos.map((photo) => photo.url),
             dto.binusianEmail,
           ),
         },
         hobbies: {
-          create: this.buildHobbyRows(dto.hobbyIds, dto.binusianEmail),
+          create: buildNestedUserHobbyCreates(dto.hobbyIds, dto.binusianEmail),
         },
       });
 
@@ -308,28 +312,6 @@ export class AuthService {
       firebaseUid,
       email,
     );
-  }
-
-  private buildPhotoRows(photoUrls: string[] = [], createdBy: string) {
-    const uniqueUrls = Array.from(new Set(photoUrls)).slice(0, 3);
-
-    return uniqueUrls.map((photoUrl, index) => ({
-      PhotoUrl: photoUrl,
-      SortOrder: index,
-      IsProfile: false,
-      Stsrc: 'A',
-      CreatedAt: new Date(),
-      CreatedBy: createdBy,
-    }));
-  }
-
-  private buildHobbyRows(hobbyIds: number[], createdBy: string) {
-    return Array.from(new Set(hobbyIds)).map((hobbyId) => ({
-      hobby: { connect: { HobbyID: hobbyId } },
-      Stsrc: 'A',
-      CreatedAt: new Date(),
-      CreatedBy: createdBy,
-    }));
   }
 
   private issueToken(user: UserProfile) {
