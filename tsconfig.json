@@ -20,6 +20,7 @@
     "noFallthroughCasesInSwitch": false,
     "esModuleInterop": true,
     "paths": {
+      "@/*": ["src/*"],
       "@common": ["src/common"],
       "@common/*": ["src/common/*"]
     }
