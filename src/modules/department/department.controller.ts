@@ -1,3 +1,4 @@
+// Module
 import {
   Body,
   Controller,
@@ -8,9 +9,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CreateDepartmentDto } from '@beefriends/shared-kernel/dto';
 import { JwtAuthGuard } from '@common';
-import { DepartmentService } from './department.service';
+
+// DTO
+import { CreateDepartmentDto } from '@beefriends/shared-kernel/dto';
+
+// Service
+import { DepartmentService } from '@/modules/department/department.service';
 
 @ApiTags('Majors')
 @Controller('majors')

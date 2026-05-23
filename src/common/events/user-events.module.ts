@@ -1,5 +1,8 @@
+// Modules
 import { Global, Module } from '@nestjs/common';
-import { UserEventPublisher } from './user-event.publisher';
+
+// Publisher
+import { UserEventPublisher } from '@/common/events/user-event.publisher';
 
 @Global()
 @Module({

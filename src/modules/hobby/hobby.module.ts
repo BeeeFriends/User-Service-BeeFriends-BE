@@ -1,6 +1,11 @@
+// Module
 import { Module } from '@nestjs/common';
-import { HobbyController } from './hobby.controller';
-import { HobbyService } from './hobby.service';
+
+// Controller
+import { HobbyController } from '@/modules/hobby/hobby.controller';
+
+// Service
+import { HobbyService } from '@/modules/hobby/hobby.service';
 
 @Module({
   controllers: [HobbyController],

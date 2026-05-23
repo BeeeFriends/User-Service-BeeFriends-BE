@@ -1,6 +1,11 @@
+// Module
 import { Module } from '@nestjs/common';
-import { CampusController } from './campus.controller';
-import { CampusService } from './campus.service';
+
+// Controller
+import { CampusController } from '@/modules/campus/campus.controller';
+
+// Service
+import { CampusService } from '@/modules/campus/campus.service';
 
 @Module({
   controllers: [CampusController],

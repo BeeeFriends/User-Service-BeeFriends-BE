@@ -1,4 +1,7 @@
+// Module
 import { Injectable, Logger } from '@nestjs/common';
+
+// Types
 import type {
   CampusEventPayload,
   CampusSyncSource,
@@ -9,7 +12,9 @@ import type {
   UserEventPayload,
   UserSyncSource,
 } from '@beefriends/shared-kernel';
-import { PUBSUB_CHANNELS, PubSubService } from '../pub-sub';
+
+// PUBSUB
+import { PUBSUB_CHANNELS, PubSubService } from '@/common/pub-sub';
 
 @Injectable()
 export class UserEventPublisher {

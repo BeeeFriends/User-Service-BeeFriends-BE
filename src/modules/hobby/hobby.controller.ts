@@ -1,3 +1,4 @@
+// Module
 import {
   Body,
   Controller,
@@ -8,9 +9,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CreateHobbyDto } from '@beefriends/shared-kernel/dto';
 import { CurrentUser, JwtAuthGuard } from '@common';
-import { HobbyService } from './hobby.service';
+
+// DTO
+import { CreateHobbyDto } from '@beefriends/shared-kernel/dto';
+
+// Service
+import { HobbyService } from '@/modules/hobby/hobby.service';
 
 @ApiTags('Hobbies')
 @Controller('hobbies')

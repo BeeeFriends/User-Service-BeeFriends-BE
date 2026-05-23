@@ -1,12 +1,17 @@
+// Module
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
 import { UserEventPublisher } from '@common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { StorageService } from '../storage/storage.service';
+
+// DTO
+import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
+
+// Service
+import { PrismaService } from '@/prisma/prisma.service';
+import { StorageService } from '@/modules/storage/storage.service';
 
 @Injectable()
 export class UserService {
@@ -116,8 +121,7 @@ export class UserService {
     if (!currentUser) throw new NotFoundException('User not found');
 
     const galleryUrls =
-      dto.photoUrls ??
-      currentUser.photos.map((photo) => photo.PhotoUrl);
+      dto.photoUrls ?? currentUser.photos.map((photo) => photo.PhotoUrl);
     const photoRows = this.buildPhotoRows(galleryUrls, userId);
 
     return this.prisma.$transaction(async (tx) => {
@@ -181,10 +185,7 @@ export class UserService {
     }
   }
 
-  private buildPhotoRows(
-    photoUrls: string[] = [],
-    userId: number,
-  ) {
+  private buildPhotoRows(photoUrls: string[] = [], userId: number) {
     const uniqueUrls = Array.from(new Set(photoUrls)).slice(0, 3);
 
     return uniqueUrls.map((photoUrl, index) => ({

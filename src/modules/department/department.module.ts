@@ -1,6 +1,11 @@
+// Module
 import { Module } from '@nestjs/common';
-import { DepartmentController } from './department.controller';
-import { DepartmentService } from './department.service';
+
+// Contoller
+import { DepartmentController } from '@/modules/department/department.controller';
+
+// Service
+import { DepartmentService } from '@/modules/department/department.service';
 
 @Module({
   controllers: [DepartmentController],

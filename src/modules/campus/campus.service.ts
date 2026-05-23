@@ -1,7 +1,12 @@
+// Modules
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateCampusDto } from '@beefriends/shared-kernel/dto';
 import { UserEventPublisher } from '@common';
-import { PrismaService } from '../../prisma/prisma.service';
+
+// DTO
+import { CreateCampusDto } from '@beefriends/shared-kernel/dto';
+
+// Service
+import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
 export class CampusService {

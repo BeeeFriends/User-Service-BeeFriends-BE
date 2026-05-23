@@ -1,3 +1,4 @@
+// Module
 import {
   Body,
   Controller,
@@ -8,9 +9,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CreateCampusDto } from '@beefriends/shared-kernel/dto';
 import { JwtAuthGuard } from '@common';
-import { CampusService } from './campus.service';
+
+// DTO
+import { CreateCampusDto } from '@beefriends/shared-kernel/dto';
+
+// Service
+import { CampusService } from '@/modules/campus/campus.service';
 
 @ApiTags('Campus')
 @Controller('campus')

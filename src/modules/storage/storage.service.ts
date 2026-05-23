@@ -10,7 +10,7 @@ import { Storage } from '@google-cloud/storage';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
 import { Readable } from 'stream';
-import { readFirebaseServiceAccount } from '../../config/firebase-admin';
+import { readFirebaseServiceAccount } from '@/config/firebase-admin';
 
 export type UploadedBlob = {
   objectName: string;

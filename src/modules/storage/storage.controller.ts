@@ -1,6 +1,9 @@
+// Modules
 import { Controller, Get, NotFoundException, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { StorageService } from './storage.service';
+
+// Service
+import { StorageService } from '@/modules/storage/storage.service';
 
 @Controller('storage')
 export class StorageController {

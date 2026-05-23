@@ -1,3 +1,4 @@
+// Module
 import {
   BadRequestException,
   Body,
@@ -19,10 +20,14 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
 import { CurrentUser, JwtAuthGuard } from '@common';
 import { memoryStorage } from 'multer';
-import { UserService } from './user.service';
+
+// DTO
+import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
+
+// Service
+import { UserService } from '@/modules/user/user.service';
 
 const imageFileFilter = (
   _request: unknown,
