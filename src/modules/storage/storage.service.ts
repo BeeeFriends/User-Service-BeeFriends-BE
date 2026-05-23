@@ -17,65 +17,191 @@ export type UploadedBlob = {
   url: string;
 };
 
+type StoredObject = {
+  body: Readable;
+  contentType: string;
+  cacheControl?: string;
+};
+
+interface ObjectStorageProvider {
+  upload(objectName: string, file: Express.Multer.File): Promise<void>;
+  get(objectName: string): Promise<StoredObject>;
+  delete(objectName: string): Promise<void>;
+}
+
+class S3ObjectStorageProvider implements ObjectStorageProvider {
+  constructor(
+    private readonly s3Client: S3Client,
+    private readonly bucketName: string,
+  ) {}
+
+  async upload(objectName: string, file: Express.Multer.File) {
+    await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: objectName,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+        CacheControl: 'public, max-age=31536000, immutable',
+      }),
+    );
+  }
+
+  async get(objectName: string) {
+    const object = await this.s3Client.send(
+      new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: objectName,
+      }),
+    );
+
+    return {
+      body: object.Body as Readable,
+      contentType: object.ContentType ?? 'application/octet-stream',
+      cacheControl: object.CacheControl,
+    };
+  }
+
+  async delete(objectName: string) {
+    await this.s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucketName,
+        Key: objectName,
+      }),
+    );
+  }
+}
+
+class GcsObjectStorageProvider implements ObjectStorageProvider {
+  constructor(
+    private readonly gcsStorage: Storage,
+    private readonly bucketName: string,
+  ) {}
+
+  async upload(objectName: string, file: Express.Multer.File) {
+    const bucketFile = this.gcsStorage.bucket(this.bucketName).file(objectName);
+
+    await bucketFile.save(file.buffer, {
+      contentType: file.mimetype,
+      resumable: false,
+      metadata: {
+        cacheControl: 'public, max-age=31536000, immutable',
+      },
+    });
+  }
+
+  async get(objectName: string) {
+    const bucketFile = this.gcsStorage.bucket(this.bucketName).file(objectName);
+    const [metadata] = await bucketFile.getMetadata();
+
+    return {
+      body: bucketFile.createReadStream(),
+      contentType: metadata.contentType ?? 'application/octet-stream',
+      cacheControl: metadata.cacheControl,
+    };
+  }
+
+  async delete(objectName: string) {
+    await this.gcsStorage
+      .bucket(this.bucketName)
+      .file(objectName)
+      .delete({ ignoreNotFound: true });
+  }
+}
+
 @Injectable()
 export class StorageService {
-  private readonly gcsStorage?: Storage;
-  private readonly s3Client?: S3Client;
-  private readonly s3Endpoint?: string;
+  private readonly provider: ObjectStorageProvider;
   private readonly bucketName: string;
   private readonly publicBaseUrl?: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.bucketName =
-      this.configService.get<string>('RAILWAY_STORAGE_BUCKET') ??
-      this.configService.get<string>('S3_BUCKET') ??
-      this.configService.get<string>('AWS_S3_BUCKET') ??
-      this.configService.get<string>('FIREBASE_STORAGE_BUCKET') ??
-      this.configService.get<string>('GOOGLE_CLOUD_STORAGE_BUCKET') ??
-      this.configService.get<string>('GCS_BUCKET_NAME') ??
-      this.configService.get<string>('STORAGE_BUCKET') ??
-      '';
+    this.bucketName = this.resolveBucketName();
 
     if (!this.bucketName) {
       throw new Error('Storage bucket is required');
     }
 
-    this.publicBaseUrl = this.configService.get<string>('STORAGE_PUBLIC_URL');
+    this.publicBaseUrl = this.resolvePublicBaseUrl();
+    this.provider = this.createStorageProvider();
+  }
 
-    this.s3Endpoint =
+  async uploadUserPhoto(
+    userEmail: string,
+    file: Express.Multer.File,
+    folder: 'profile' | 'gallery' | 'chat',
+  ): Promise<UploadedBlob> {
+    if (!file) {
+      throw new BadRequestException('Photo file is required');
+    }
+
+    if (!file.mimetype?.startsWith('image/')) {
+      throw new BadRequestException('Only image files are allowed');
+    }
+
+    const objectName = this.buildObjectName(userEmail, file, folder);
+    await this.provider.upload(objectName, file);
+
+    return {
+      objectName,
+      url: this.getPublicUrl(objectName),
+    };
+  }
+
+  async deleteUploadedBlobs(blobs: UploadedBlob[]) {
+    await Promise.all(
+      blobs.map((blob) => this.deleteUploadedBlob(blob).catch(() => undefined)),
+    );
+  }
+
+  async getObject(objectName: string) {
+    return this.provider.get(objectName);
+  }
+
+  private createStorageProvider(): ObjectStorageProvider {
+    const s3Provider = this.createS3Provider();
+    if (s3Provider) return s3Provider;
+
+    return new GcsObjectStorageProvider(
+      this.createGcsStorage(),
+      this.bucketName,
+    );
+  }
+
+  private createS3Provider() {
+    const endpoint =
       this.configService.get<string>('RAILWAY_STORAGE_ENDPOINT') ??
       this.configService.get<string>('S3_ENDPOINT') ??
       this.configService.get<string>('AWS_S3_ENDPOINT');
-    const s3AccessKeyId =
+    const accessKeyId =
       this.configService.get<string>('RAILWAY_STORAGE_ACCESS_KEY_ID') ??
       this.configService.get<string>('S3_ACCESS_KEY_ID') ??
       this.configService.get<string>('AWS_ACCESS_KEY_ID');
-    const s3SecretAccessKey =
+    const secretAccessKey =
       this.configService.get<string>('RAILWAY_STORAGE_SECRET_ACCESS_KEY') ??
       this.configService.get<string>('S3_SECRET_ACCESS_KEY') ??
       this.configService.get<string>('AWS_SECRET_ACCESS_KEY');
 
-    if (this.s3Endpoint && s3AccessKeyId && s3SecretAccessKey) {
-      this.s3Client = new S3Client({
-        endpoint: this.s3Endpoint,
-        forcePathStyle: true,
-        region:
-          this.configService.get<string>('RAILWAY_STORAGE_REGION') ??
-          this.configService.get<string>('S3_REGION') ??
-          this.configService.get<string>('AWS_REGION') ??
-          'auto',
-        credentials: {
-          accessKeyId: s3AccessKeyId,
-          secretAccessKey: s3SecretAccessKey,
-        },
-      });
-      return;
-    }
+    if (!endpoint || !accessKeyId || !secretAccessKey) return null;
 
-    this.publicBaseUrl =
-      this.publicBaseUrl ??
-      this.configService.get<string>('GOOGLE_CLOUD_STORAGE_PUBLIC_URL');
+    const s3Client = new S3Client({
+      endpoint,
+      forcePathStyle: true,
+      region:
+        this.configService.get<string>('RAILWAY_STORAGE_REGION') ??
+        this.configService.get<string>('S3_REGION') ??
+        this.configService.get<string>('AWS_REGION') ??
+        'auto',
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
+    });
 
+    return new S3ObjectStorageProvider(s3Client, this.bucketName);
+  }
+
+  private createGcsStorage() {
     const firebaseCredential = readFirebaseServiceAccount()?.serviceAccount;
     const projectId =
       this.configService.get<string>('GOOGLE_CLOUD_PROJECT_ID') ??
@@ -94,99 +220,37 @@ export class StorageService {
         .get<string>('FIREBASE_PRIVATE_KEY')
         ?.replace(/\\n/g, '\n');
 
-    this.gcsStorage =
-      projectId && clientEmail && privateKey
-        ? new Storage({
-            projectId,
-            credentials: {
-              client_email: clientEmail,
-              private_key: privateKey,
-            },
-          })
-        : new Storage({ projectId });
-  }
-
-  async uploadUserPhoto(
-    userEmail: string,
-    file: Express.Multer.File,
-    folder: 'profile' | 'gallery' | 'chat',
-  ): Promise<UploadedBlob> {
-    if (!file) {
-      throw new BadRequestException('Photo file is required');
-    }
-
-    if (!file.mimetype?.startsWith('image/')) {
-      throw new BadRequestException('Only image files are allowed');
-    }
-
-    const objectName = this.buildObjectName(userEmail, file, folder);
-
-    if (this.s3Client) {
-      await this.s3Client.send(
-        new PutObjectCommand({
-          Bucket: this.bucketName,
-          Key: objectName,
-          Body: file.buffer,
-          ContentType: file.mimetype,
-          CacheControl: 'public, max-age=31536000, immutable',
-        }),
-      );
-    } else if (this.gcsStorage) {
-      const bucketFile = this.gcsStorage
-        .bucket(this.bucketName)
-        .file(objectName);
-
-      await bucketFile.save(file.buffer, {
-        contentType: file.mimetype,
-        resumable: false,
-        metadata: {
-          cacheControl: 'public, max-age=31536000, immutable',
+    if (projectId && clientEmail && privateKey) {
+      return new Storage({
+        projectId,
+        credentials: {
+          client_email: clientEmail,
+          private_key: privateKey,
         },
       });
     }
 
-    return {
-      objectName,
-      url: this.getPublicUrl(objectName),
-    };
+    return new Storage({ projectId });
   }
 
-  async deleteUploadedBlobs(blobs: UploadedBlob[]) {
-    await Promise.all(
-      blobs.map((blob) => this.deleteUploadedBlob(blob).catch(() => undefined)),
+  private resolveBucketName() {
+    return (
+      this.configService.get<string>('RAILWAY_STORAGE_BUCKET') ??
+      this.configService.get<string>('S3_BUCKET') ??
+      this.configService.get<string>('AWS_S3_BUCKET') ??
+      this.configService.get<string>('FIREBASE_STORAGE_BUCKET') ??
+      this.configService.get<string>('GOOGLE_CLOUD_STORAGE_BUCKET') ??
+      this.configService.get<string>('GCS_BUCKET_NAME') ??
+      this.configService.get<string>('STORAGE_BUCKET') ??
+      ''
     );
   }
 
-  async getObject(objectName: string) {
-    if (this.s3Client) {
-      const object = await this.s3Client.send(
-        new GetObjectCommand({
-          Bucket: this.bucketName,
-          Key: objectName,
-        }),
-      );
-
-      return {
-        body: object.Body as Readable,
-        contentType: object.ContentType ?? 'application/octet-stream',
-        cacheControl: object.CacheControl,
-      };
-    }
-
-    const [metadata] = await this.gcsStorage
-      .bucket(this.bucketName)
-      .file(objectName)
-      .getMetadata();
-    const body = this.gcsStorage
-      .bucket(this.bucketName)
-      .file(objectName)
-      .createReadStream();
-
-    return {
-      body,
-      contentType: metadata.contentType ?? 'application/octet-stream',
-      cacheControl: metadata.cacheControl,
-    };
+  private resolvePublicBaseUrl() {
+    return (
+      this.configService.get<string>('STORAGE_PUBLIC_URL') ??
+      this.configService.get<string>('GOOGLE_CLOUD_STORAGE_PUBLIC_URL')
+    );
   }
 
   private buildObjectName(
@@ -215,19 +279,6 @@ export class StorageService {
   }
 
   private async deleteUploadedBlob(blob: UploadedBlob) {
-    if (this.s3Client) {
-      await this.s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: this.bucketName,
-          Key: blob.objectName,
-        }),
-      );
-      return;
-    }
-
-    await this.gcsStorage
-      ?.bucket(this.bucketName)
-      .file(blob.objectName)
-      .delete({ ignoreNotFound: true });
+    await this.provider.delete(blob.objectName);
   }
 }
