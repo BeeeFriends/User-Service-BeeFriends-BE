@@ -1,3 +1,4 @@
+// Module
 import {
   BadRequestException,
   Body,
@@ -8,18 +9,20 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { memoryStorage } from 'multer';
+
+// DTO
 import {
   FirebaseRegisterDto,
   FirebaseTokenLoginDto,
   LoginDto,
 } from '@beefriends/shared-kernel/dto';
-import { memoryStorage } from 'multer';
-import { AuthService } from './auth.service';
 
-type RegisterUploadFiles = {
-  profilePhoto?: Express.Multer.File[];
-  photos?: Express.Multer.File[];
-};
+// Service
+import { AuthService } from '@/modules/auth/auth.service';
+
+// Types
+import type { RegisterUploadFiles } from '@/types/auth.type';
 
 const imageFileFilter = (
   _request: unknown,

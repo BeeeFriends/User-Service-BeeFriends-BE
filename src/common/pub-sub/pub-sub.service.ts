@@ -1,3 +1,4 @@
+// Module
 import {
   Injectable,
   Logger,
@@ -5,6 +6,9 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { createClient } from 'redis';
+
+// Types
+import type { PendingEvent, RedisClient } from '@/types/pub-sub.type';
 
 export const PUBSUB_CHANNELS = {
   CAMPUS_EVENTS: 'beefriends:campus-events',
@@ -15,12 +19,6 @@ export const PUBSUB_CHANNELS = {
 
 const DEFAULT_RECONNECT_INTERVAL_MS = 5000;
 const DEFAULT_STREAM_MAXLEN = 10000;
-
-type PendingEvent = {
-  channel: string;
-  payload: unknown;
-};
-type RedisClient = ReturnType<typeof createClient>;
 
 @Injectable()
 export class PubSubService implements OnModuleInit, OnModuleDestroy {

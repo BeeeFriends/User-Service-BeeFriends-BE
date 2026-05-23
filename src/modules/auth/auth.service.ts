@@ -1,3 +1,4 @@
+// Modules
 import {
   BadRequestException,
   ConflictException,
@@ -6,29 +7,29 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import * as admin from 'firebase-admin';
+import { UserEventPublisher } from '@common';
+
+// DTO
 import {
   FirebaseRegisterDto,
   FirebaseTokenLoginDto,
   LoginDto,
   RegisterDto,
 } from '@beefriends/shared-kernel/dto';
-import * as admin from 'firebase-admin';
-import { UserEventPublisher } from '@common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { StorageService, UploadedBlob } from '../storage/storage.service';
 
-type RegisterUploadFiles = {
-  profilePhoto?: Express.Multer.File[];
-  photos?: Express.Multer.File[];
-};
+// Service
+import { PrismaService } from '@/prisma/prisma.service';
+import {
+  StorageService,
+  UploadedBlob,
+} from '@/modules/storage/storage.service';
 
-type FirebasePasswordLoginResponse = {
-  localId?: string;
-  email?: string;
-  error?: {
-    message?: string;
-  };
-};
+// Types
+import type {
+  RegisterUploadFiles,
+  FirebasePasswordLoginResponse,
+} from '@/types/auth.type';
 
 @Injectable()
 export class AuthService {
@@ -362,10 +363,7 @@ export class AuthService {
     }
   }
 
-  private buildPhotoRows(
-    photoUrls: string[] = [],
-    createdBy: string,
-  ) {
+  private buildPhotoRows(photoUrls: string[] = [], createdBy: string) {
     const uniqueUrls = Array.from(new Set(photoUrls)).slice(0, 3);
 
     return uniqueUrls.map((photoUrl, index) => ({

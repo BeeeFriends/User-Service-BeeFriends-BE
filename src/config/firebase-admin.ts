@@ -1,15 +1,11 @@
+// Module
 import * as fs from 'fs';
 
-export type FirebaseServiceAccount = {
-  project_id: string;
-  client_email: string;
-  private_key: string;
-};
-
-export type FirebaseServiceAccountSource = {
-  serviceAccount: FirebaseServiceAccount;
-  source: string;
-};
+// Type
+import type {
+  FirebaseServiceAccount,
+  FirebaseServiceAccountSource,
+} from '@/types/firebase.types';
 
 function normalizePrivateKey(privateKey: string) {
   return privateKey.replace(/\\n/g, '\n');
