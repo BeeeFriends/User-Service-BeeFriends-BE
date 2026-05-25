@@ -1,4 +1,5 @@
 import type { UserProfile } from '@/modules/user/user-profile.prisma';
+import { normalizeStorageUrl } from '@/modules/storage/storage.service';
 
 export function toProfileResponse(user: UserProfile) {
   return {
@@ -10,7 +11,7 @@ export function toProfileResponse(user: UserProfile) {
     age: user.Age,
     binusianYear: user.CodeYear,
     description: user.Description,
-    profilePhotoUrl: user.ProfilePhotoUrl,
+    profilePhotoUrl: normalizeStorageUrl(user.ProfilePhotoUrl),
     campus: user.campus
       ? {
           id: user.campus.CampusID,
@@ -32,7 +33,7 @@ export function toProfileResponse(user: UserProfile) {
     photos:
       user.photos?.map((photo) => ({
         id: photo.UserPhotoID,
-        url: photo.PhotoUrl,
+        url: normalizeStorageUrl(photo.PhotoUrl),
         sortOrder: photo.SortOrder,
         isProfile: photo.IsProfile,
       })) ?? [],

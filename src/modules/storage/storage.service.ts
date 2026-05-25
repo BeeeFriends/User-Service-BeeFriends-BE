@@ -17,6 +17,8 @@ export type UploadedBlob = {
   url: string;
 };
 
+const STORAGE_ROUTE_PREFIX = '/storage/';
+
 type StoredObject = {
   body: Readable;
   contentType: string;
@@ -113,7 +115,6 @@ class GcsObjectStorageProvider implements ObjectStorageProvider {
 export class StorageService {
   private readonly provider: ObjectStorageProvider;
   private readonly bucketName: string;
-  private readonly publicBaseUrl?: string;
 
   constructor(private readonly configService: ConfigService) {
     this.bucketName = this.resolveBucketName();
@@ -122,7 +123,6 @@ export class StorageService {
       throw new Error('Storage bucket is required');
     }
 
-    this.publicBaseUrl = this.resolvePublicBaseUrl();
     this.provider = this.createStorageProvider();
   }
 
@@ -144,7 +144,7 @@ export class StorageService {
 
     return {
       objectName,
-      url: this.getPublicUrl(objectName),
+      url: getStoragePublicPath(objectName),
     };
   }
 
@@ -246,13 +246,6 @@ export class StorageService {
     );
   }
 
-  private resolvePublicBaseUrl() {
-    return (
-      this.configService.get<string>('STORAGE_PUBLIC_URL') ??
-      this.configService.get<string>('GOOGLE_CLOUD_STORAGE_PUBLIC_URL')
-    );
-  }
-
   private buildObjectName(
     userEmail: string,
     file: Express.Multer.File,
@@ -270,15 +263,33 @@ export class StorageService {
     return subtype ? `.${subtype}` : '';
   }
 
-  private getPublicUrl(objectName: string) {
-    if (this.publicBaseUrl) {
-      return `${this.publicBaseUrl.replace(/\/$/, '')}/${objectName}`;
-    }
-
-    return `https://storage.googleapis.com/${this.bucketName}/${objectName}`;
-  }
-
   private async deleteUploadedBlob(blob: UploadedBlob) {
     await this.provider.delete(blob.objectName);
   }
+}
+
+export function getStoragePublicPath(objectName: string) {
+  return `${STORAGE_ROUTE_PREFIX}${objectName.replace(/^\/+/, '')}`;
+}
+
+export function normalizeStorageUrl(value?: string | null) {
+  const raw = value?.trim();
+  if (!raw) return '';
+
+  if (raw.startsWith(STORAGE_ROUTE_PREFIX)) return raw;
+  if (raw.startsWith('/users/')) return `${STORAGE_ROUTE_PREFIX}${raw.slice(1)}`;
+  if (raw.startsWith('users/')) return getStoragePublicPath(raw);
+
+  try {
+    const parsed = new URL(raw);
+    const storageIndex = parsed.pathname.indexOf(STORAGE_ROUTE_PREFIX);
+
+    if (storageIndex !== -1) {
+      return decodeURIComponent(parsed.pathname.slice(storageIndex));
+    }
+  } catch {
+    return raw;
+  }
+
+  return raw;
 }

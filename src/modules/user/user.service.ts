@@ -6,7 +6,10 @@ import { ProfileReferenceService, UserEventPublisher } from '@common';
 import { UpdateUserDto } from '@beefriends/shared-kernel/dto';
 
 // Service
-import { StorageService } from '@/modules/storage/storage.service';
+import {
+  normalizeStorageUrl,
+  StorageService,
+} from '@/modules/storage/storage.service';
 import {
   UpdateUserProfileData,
   UserRepository,
@@ -57,7 +60,7 @@ export class UserService {
     if (dto.majorId !== undefined) data.DepartmentID = dto.majorId;
     if (dto.binusianYear !== undefined) data.CodeYear = dto.binusianYear;
     if (dto.profilePhotoUrl !== undefined) {
-      data.ProfilePhotoUrl = dto.profilePhotoUrl;
+      data.ProfilePhotoUrl = normalizeStorageUrl(dto.profilePhotoUrl);
     }
 
     const shouldRefreshRelations =
@@ -102,7 +105,8 @@ export class UserService {
     if (!currentUser) throw new NotFoundException('User not found');
 
     const galleryUrls =
-      dto.photoUrls ?? currentUser.photos.map((photo) => photo.PhotoUrl);
+      dto.photoUrls?.map((url) => normalizeStorageUrl(url)) ??
+      currentUser.photos.map((photo) => normalizeStorageUrl(photo.PhotoUrl));
     const photoRows = buildUserPhotoCreateRows(galleryUrls, userId);
 
     return this.userRepository.replaceProfileRelations(userId, {
