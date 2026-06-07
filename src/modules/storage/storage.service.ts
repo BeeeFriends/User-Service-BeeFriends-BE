@@ -277,7 +277,8 @@ export function normalizeStorageUrl(value?: string | null) {
   if (!raw) return '';
 
   if (raw.startsWith(STORAGE_ROUTE_PREFIX)) return raw;
-  if (raw.startsWith('/users/')) return `${STORAGE_ROUTE_PREFIX}${raw.slice(1)}`;
+  if (raw.startsWith('/users/'))
+    return `${STORAGE_ROUTE_PREFIX}${raw.slice(1)}`;
   if (raw.startsWith('users/')) return getStoragePublicPath(raw);
 
   try {

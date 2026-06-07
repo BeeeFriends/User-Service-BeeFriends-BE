@@ -38,7 +38,7 @@ function parseServiceAccountJson(
   rawJson: string,
   source: string,
 ): FirebaseServiceAccountSource {
-  const parsed = JSON.parse(rawJson);
+  const parsed: unknown = JSON.parse(rawJson);
   if (!isFirebaseServiceAccount(parsed)) {
     throw new Error(
       `${source} must be a Firebase Admin SDK service account JSON with project_id, client_email, and private_key`,

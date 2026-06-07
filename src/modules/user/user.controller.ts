@@ -20,7 +20,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { CurrentUser, JwtAuthGuard } from '@common';
+import { CurrentUser, JwtAuthGuard, type CurrentUserPayload } from '@common';
 import { memoryStorage } from 'multer';
 
 // DTO
@@ -51,13 +51,16 @@ export class UserController {
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
-  getMe(@CurrentUser() user: any) {
+  getMe(@CurrentUser() user: CurrentUserPayload) {
     return this.userService.findById(user.userId);
   }
 
   @Patch('me')
   @ApiOperation({ summary: 'Update current user profile' })
-  updateMe(@CurrentUser() user: any, @Body() dto: UpdateUserDto) {
+  updateMe(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: UpdateUserDto,
+  ) {
     return this.userService.updateMe(user.userId, dto);
   }
 
@@ -84,7 +87,7 @@ export class UserController {
   })
   @ApiOperation({ summary: 'Upload an image for chat attachments' })
   uploadChatAttachment(
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserPayload,
     @UploadedFile() image?: Express.Multer.File,
   ) {
     if (!image) throw new BadRequestException('Image file is required');
@@ -115,7 +118,7 @@ export class UserController {
   })
   @ApiOperation({ summary: 'Upload an image for profile photos' })
   uploadProfilePhoto(
-    @CurrentUser() user: any,
+    @CurrentUser() user: CurrentUserPayload,
     @UploadedFile() image?: Express.Multer.File,
     @Body('kind') kind?: string,
   ) {

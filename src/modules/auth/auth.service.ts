@@ -37,6 +37,15 @@ import type {
   FirebasePasswordLoginResponse,
 } from '@/types/auth.type';
 
+function hasFirebaseErrorCode(error: unknown, code: string) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code
+  );
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -206,8 +215,8 @@ export class AuthService {
         photoURL: profilePhotoUrl,
       });
       return { user, created: true };
-    } catch (error: any) {
-      if (error?.code !== 'auth/email-already-exists') {
+    } catch (error: unknown) {
+      if (!hasFirebaseErrorCode(error, 'auth/email-already-exists')) {
         throw error;
       }
 

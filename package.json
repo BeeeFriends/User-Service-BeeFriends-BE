@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "prebuild": "prisma generate",
     "build": "nest build && tsc-alias",
     "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.ts\"",
     "start": "nest start",
@@ -27,7 +28,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1038.0",
-    "@beefriends/shared-kernel": "^3.0.4",
+    "@beefriends/shared-kernel": "^4.1.2",
     "@google-cloud/storage": "^7.19.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.3",
